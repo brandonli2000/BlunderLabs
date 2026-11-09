@@ -25,6 +25,25 @@ export function parseTimeControl(tag: string | undefined): TimeControl | null {
   return null;
 }
 
+export type TimeClass = "bullet" | "blitz" | "rapid" | "classical" | "correspondence" | "unknown";
+
+/**
+ * Speed category by Lichess' definition, so it matches what players see there:
+ * estimated duration = initial + 40 × increment, then < 3 min bullet, < 8 min
+ * blitz, < 25 min rapid, otherwise classical. (Lichess' separate "ultrabullet"
+ * is folded into bullet: too few games to profile separately.) Daily games are
+ * correspondence; untimed or unreadable controls are "unknown", never guessed.
+ */
+export function timeClassOf(timeControl: TimeControl | null): TimeClass {
+  if (timeControl?.kind === "daily") return "correspondence";
+  if (timeControl?.kind !== "live") return "unknown";
+  const estimatedSeconds = (timeControl.initialMs + 40 * timeControl.incrementMs) / 1000;
+  if (estimatedSeconds < 180) return "bullet";
+  if (estimatedSeconds < 480) return "blitz";
+  if (estimatedSeconds < 1500) return "rapid";
+  return "classical";
+}
+
 const CLK = /\[%clk\s+(\d+):(\d{1,2}):(\d{1,2}(?:\.\d+)?)\]/;
 
 /** Remaining time in ms from a move comment, or null if it has no clock. */

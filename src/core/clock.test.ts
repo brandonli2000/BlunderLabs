@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fixture } from "../test/fakeFetch";
-import { computeGameClock, formatClock, formatSpent, parseClockComment, parseTimeControl } from "./clock";
+import { computeGameClock, formatClock, formatSpent, parseClockComment, parseTimeControl, timeClassOf } from "./clock";
 import { parseGame, splitPgn } from "./pgn";
 
 describe("parseTimeControl", () => {
@@ -171,5 +171,38 @@ describe("formatting", () => {
     expect(formatSpent(400, 100, "measured")).toBe("0.4s");
     expect(formatSpent(12_000, 1000, "measured")).toBe("12s");
     expect(formatSpent(65_000, 1000, "estimated")).toBe("~1m05s");
+  });
+});
+
+describe("timeClassOf (Lichess estimated duration: initial + 40 x increment)", () => {
+  const cls = (tag: string | undefined) => timeClassOf(parseTimeControl(tag));
+
+  it("splits at 3, 8 and 25 minutes of estimated duration", () => {
+    expect(cls("60+0")).toBe("bullet");
+    expect(cls("179+0")).toBe("bullet");
+    expect(cls("180+0")).toBe("blitz");
+    expect(cls("479+0")).toBe("blitz");
+    expect(cls("480+0")).toBe("rapid");
+    expect(cls("1499+0")).toBe("rapid");
+    expect(cls("1500+0")).toBe("classical");
+    expect(cls("5400+30")).toBe("classical");
+  });
+
+  it("counts the increment as 40 extra moves", () => {
+    expect(cls("120+1")).toBe("bullet"); // 160 s
+    expect(cls("120+2")).toBe("blitz"); // 200 s
+    expect(cls("300+3")).toBe("blitz"); // 420 s
+    expect(cls("300+5")).toBe("rapid"); // 500 s
+    expect(cls("0+1")).toBe("bullet"); // 40 s: zero start time still classifies
+    expect(cls("300+2.5")).toBe("blitz"); // fractional increment, 400 s
+  });
+
+  it("calls daily games correspondence, and untimed or unreadable controls unknown", () => {
+    expect(cls("1/259200")).toBe("correspondence");
+    expect(cls("-")).toBe("unknown");
+    expect(cls(undefined)).toBe("unknown");
+    expect(cls("?")).toBe("unknown");
+    expect(cls("40/7200:3600")).toBe("unknown");
+    expect(timeClassOf(null)).toBe("unknown");
   });
 });
