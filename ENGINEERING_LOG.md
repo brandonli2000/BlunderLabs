@@ -157,6 +157,9 @@ not just a test issue. The board is now sized to `min(640px, 100%, 100vh − 210
 test helper clicks through the element so Playwright scrolls it into view.
 
 ### 2026-11-08 · Measurement · Test suite (session 4)
+Final review re-run: typecheck clean, 140/140 Vitest (22 files), 14/14 Playwright (19.6 s,
+while the strategy experiment was using CPU in the background), build OK.
+
 140 unit/integration tests (Vitest, includes real-Stockfish tests) in ~2 s; 14 Playwright
 E2E tests in Chromium in ~38 s locally (3 workers), stable across a `--repeat-each=2` run
 (26/26). Catalogue build time shown in-app: 12 ms for one analysed 46-ply game (Chrome,

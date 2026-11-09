@@ -4,8 +4,8 @@ _Last updated: 2026-11-08 (session 4)_
 
 **Current phase:** Phase 2 (Player intelligence and mistake mining). Phase 1 is functionally
 complete except deployment, which waits on the licence decision. See ROADMAP.md.
-**Health:** typecheck clean · 140/140 unit/integration tests · 14/14 Playwright E2E tests
-(stable over 2 repeats) · production build OK · GitHub CI green on `88dbe53` (the last push;
+**Health (final review, session 4):** typecheck clean · 140/140 unit/integration tests
+(22 files) · 14/14 Playwright E2E tests (also stable over a 2× repeat run) · production build OK · GitHub CI green on `88dbe53` (the last push;
 session-4 commits are local and not pushed).
 
 ## Implemented and verified ✅
@@ -41,8 +41,10 @@ session-4 commits are local and not pushed).
 ## In progress 🟡
 - **Analysis-strategy experiment** (`npm run bench:strategy`): compares uniform depth
   14/12/10 and three shallow-then-deep plans against a depth-18 reference on 56 real games.
-  Started in session 3; still running at the end of session 4 (the depth-18 reference over
-  ~3,900 positions is much slower than estimated, and Vitest buffers output until the end).
+  Started in session 3. The depth-18 reference finished during session 4
+  (`bench/results/reference-d18.json`, kept uncommitted until the candidate results exist);
+  the six candidate runs were still in progress at the final review (Vitest buffers output
+  until the end).
   **No results yet; the default analysis plan is unchanged (uniform depth 14).** When it
   finishes: results land in `bench/results/strategy-*.json` and `reference-d18.json`.
   Record accuracy (agreement, precision/recall for mistake+) and cost in ENGINEERING_LOG
