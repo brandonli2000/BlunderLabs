@@ -408,7 +408,6 @@ input {
 }
 
 .player-acc {
-  margin-left: auto;
   color: var(--ink);
   font-weight: 600;
 }
@@ -1116,4 +1115,44 @@ kbd {
 .page-message {
   max-width: 520px;
   margin: 40px auto;
+}
+
+/* ---------- Clocks ---------- */
+
+.player-clock {
+  font-family: var(--font-data);
+  font-size: 13px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+}
+
+.player-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ml-move {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.ml-time {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-weight: 400;
+}
+
+.ml-time-est {
+  font-style: italic;
+}
+
+.ml-active .ml-time {
+  color: color-mix(in srgb, var(--paper) 70%, transparent);
 }

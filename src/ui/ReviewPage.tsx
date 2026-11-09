@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { computeGameClock, formatClock, parseTimeControl, type GameClock } from "../core/clock";
 import { formatScore } from "../core/evaluation";
 import { isPromotion, legalDestinations, pieceColorAt, playMove, type PromotionPiece } from "../core/moves";
 import { parseGame, type ParsedGame } from "../core/pgn";
@@ -65,6 +66,7 @@ function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: P
   const [selected, setSelected] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<{ from: string; to: string } | null>(null);
   const { state, run, stop } = useGameAnalysis(record.id, game, onAnalysisSaved);
+  const clock = useMemo(() => computeGameClock(game.moves, parseTimeControl(game.headers.TimeControl)), [game]);
 
   const lastPly = game.moves.length;
   const exploring = variation !== null && variation.cursor > 0;
@@ -161,7 +163,12 @@ function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: P
   return (
     <div className="review">
       <div className="review-board">
-        <PlayerStrip game={game} color={orientation === "w" ? "b" : "w"} analysis={analysis} />
+        <PlayerStrip
+          game={game}
+          color={orientation === "w" ? "b" : "w"}
+          analysis={analysis}
+          clockText={clockAt(clock, game, orientation === "w" ? "b" : "w", exploring ? variation.branchPly : ply)}
+        />
         <div className="board-wrap">
           <Board
             fen={fen}
@@ -185,7 +192,7 @@ function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: P
             />
           )}
         </div>
-        <PlayerStrip game={game} color={orientation} analysis={analysis} />
+        <PlayerStrip game={game} color={orientation} analysis={analysis} clockText={clockAt(clock, game, orientation, exploring ? variation.branchPly : ply)} />
         <nav className="nav-controls" aria-label="Move navigation">
           <button className="btn" onClick={() => seek(0)} aria-label="First move">
             ⏮
@@ -280,6 +287,7 @@ function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: P
             startFen={game.startFen}
             moves={game.moves}
             verdicts={analysis?.moves ?? null}
+            clock={clock}
             ply={exploring ? -1 : ply}
             onSeek={seek}
           />
@@ -287,6 +295,20 @@ function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: P
       </aside>
     </div>
   );
+}
+
+/**
+ * Remaining time for `color` at main-line `ply`: the clock after that side's
+ * latest move so far, or the starting time before they've moved.
+ */
+function clockAt(clock: GameClock | null, game: ParsedGame, color: Color, ply: number): string | null {
+  if (!clock) return null;
+  for (let i = ply - 1; i >= 0; i--) {
+    if (game.moves[i]!.color !== color) continue;
+    const remaining = clock.moves[i]!.remainingMs;
+    return remaining === null ? null : formatClock(remaining, clock.resolutionMs);
+  }
+  return clock.timeControl?.kind === "live" ? formatClock(clock.timeControl.initialMs, clock.resolutionMs) : null;
 }
 
 /** Show the board from the imported player's side when we know who they are. */

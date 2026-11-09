@@ -1,4 +1,5 @@
 import { Chess, DEFAULT_POSITION } from "chess.js";
+import { parseClockComment } from "./clock";
 import type { Color } from "./types";
 
 /** One half-move of a game, with the positions on either side of it. */
@@ -11,6 +12,8 @@ export interface GameMove {
   uci: string;
   fenBefore: string;
   fenAfter: string;
+  /** Remaining clock after this move from a [%clk] annotation, if present. */
+  clockMs: number | null;
 }
 
 export interface ParsedGame {
@@ -60,6 +63,9 @@ export function parseGame(pgn: string): ParsedGame {
 
   const headers = chess.getHeaders();
   const startFen = headers.FEN ?? DEFAULT_POSITION;
+  // chess.js keys main-line comments by the FEN after the move. Full FENs
+  // include the move counters, so repeated positions still get distinct keys.
+  const comments = new Map(chess.getComments().map((c) => [c.fen, c.comment]));
   const moves = chess.history({ verbose: true }).map(
     (m, i): GameMove => ({
       ply: i + 1,
@@ -68,6 +74,7 @@ export function parseGame(pgn: string): ParsedGame {
       uci: m.lan,
       fenBefore: m.before,
       fenAfter: m.after,
+      clockMs: parseClockComment(comments.get(m.after)),
     }),
   );
   return { headers, startFen, moves };

@@ -9,7 +9,18 @@ import { CLASS_GLYPH, CLASS_LABEL, isFlagged } from "./annotations";
 import type { LiveLines } from "./useLiveLines";
 import { LIVE_LIMITS } from "./useLiveLines";
 
-export function PlayerStrip({ game, color, analysis }: { game: ParsedGame; color: Color; analysis: GameAnalysis | null }) {
+export function PlayerStrip({
+  game,
+  color,
+  analysis,
+  clockText,
+}: {
+  game: ParsedGame;
+  color: Color;
+  analysis: GameAnalysis | null;
+  /** Remaining time for this side at the current move, if known. */
+  clockText: string | null;
+}) {
   const name = game.headers[color === "w" ? "White" : "Black"] ?? (color === "w" ? "White" : "Black");
   const elo = game.headers[color === "w" ? "WhiteElo" : "BlackElo"];
   const accuracy = analysis?.accuracy[color];
@@ -23,6 +34,7 @@ export function PlayerStrip({ game, color, analysis }: { game: ParsedGame; color
       <span className={`player-dot player-dot-${color}`} aria-hidden />
       <span className="player-name">{name}</span>
       {elo && elo !== "?" && <span className="player-elo">{elo}</span>}
+      <span className="player-right">
       {accuracy != null && <span className="player-acc">{accuracy.toFixed(1)}%</span>}
       {counts && (
         <span className="player-counts" title="Inaccuracies / mistakes / blunders">
@@ -30,6 +42,8 @@ export function PlayerStrip({ game, color, analysis }: { game: ParsedGame; color
           <span className="ml-blunder">{counts[2]}??</span>
         </span>
       )}
+      {clockText && <span className="player-clock">{clockText}</span>}
+      </span>
     </div>
   );
 }
