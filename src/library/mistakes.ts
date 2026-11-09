@@ -1,10 +1,12 @@
 import type { GameAnalysis } from "../analysis/gameAnalysis";
-import { computeGameClock, parseTimeControl, type SpentSource } from "../core/clock";
 import type { MoveClass } from "../core/classify";
-import { parseGame } from "../core/pgn";
-import { gamePhase, type GamePhase } from "../core/phase";
+import type { SpentSource } from "../core/clock";
+import type { GamePhase } from "../core/phase";
 import type { Color } from "../core/types";
 import type { GameRecord } from "./gameRecord";
+import { extractMoveFacts, type MoveFact } from "./moveFacts";
+
+export { ownerColor } from "./moveFacts";
 
 /**
  * One flagged move from an analysed game. It records *what* happened and
@@ -41,65 +43,51 @@ export interface MistakeEntry {
   opening: string | null;
 }
 
+type Flagged = MistakeEntry["classification"];
+
 const FLAGGED = new Set<MoveClass>(["inaccuracy", "mistake", "blunder"]);
 
-/** The colour of the account the game was imported for, if it played in this game. */
-export function ownerColor(record: GameRecord): Color | null {
-  const username = record.importedFor?.split(":")[1];
-  if (!username) return null;
-  if (record.white.toLowerCase() === username) return "w";
-  if (record.black.toLowerCase() === username) return "b";
-  return null;
+const isFlagged = (c: MoveClass): c is Flagged => FLAGGED.has(c);
+
+/** The catalogue's view of a move fact: same data, only the fields the catalogue shows. */
+function toMistakeEntry(f: MoveFact, classification: Flagged): MistakeEntry {
+  return {
+    gameId: f.gameId,
+    ply: f.ply,
+    moveNumber: f.moveNumber,
+    color: f.color,
+    player: f.player,
+    opponent: f.opponent,
+    byOwner: f.byOwner,
+    fenBefore: f.fenBefore,
+    san: f.san,
+    bestSan: f.bestSan,
+    classification,
+    winBefore: f.winBefore,
+    winAfter: f.winAfter,
+    loss: f.loss,
+    phase: f.phase,
+    clockMs: f.clockMs,
+    spentMs: f.spentMs,
+    spentSource: f.spentSource,
+    clockResolutionMs: f.clockResolutionMs,
+    initialMs: f.initialMs,
+    date: f.date,
+    timeControl: f.timeControl,
+    opening: f.opening,
+  };
 }
 
 /**
- * Flagged moves of one analysed game. Returns [] if the analysis doesn't
- * match the game (e.g. stored data is stale or corrupted) rather than
- * attaching verdicts to the wrong moves.
+ * Flagged moves of one analysed game: the inaccuracies, mistakes and blunders
+ * among its move facts, so the catalogue and the player profile can't disagree
+ * about what happened. Returns [] when the analysis doesn't match the game
+ * (see `extractMoveFacts`).
  */
 export function extractMistakes(record: GameRecord, analysis: GameAnalysis): MistakeEntry[] {
-  const game = parseGame(record.pgn);
-  if (analysis.moves.length !== game.moves.length) return [];
-  if (analysis.moves.some((v, i) => v.san !== game.moves[i]!.san)) return [];
-
-  const timeControl = parseTimeControl(game.headers.TimeControl);
-  const clock = computeGameClock(game.moves, timeControl);
-  const owner = ownerColor(record);
-  const firstMoveNumber = Number(game.startFen.split(" ")[5]) || 1;
-  const blackStarts = game.moves[0]?.color === "b";
-
-  const entries: MistakeEntry[] = [];
-  analysis.moves.forEach((verdict, i) => {
-    if (!FLAGGED.has(verdict.classification)) return;
-    const move = game.moves[i]!;
-    const time = clock?.moves[i];
-    entries.push({
-      gameId: record.id,
-      ply: move.ply,
-      moveNumber: firstMoveNumber + Math.floor((i + (blackStarts ? 1 : 0)) / 2),
-      color: move.color,
-      player: move.color === "w" ? record.white : record.black,
-      opponent: move.color === "w" ? record.black : record.white,
-      byOwner: owner === null ? null : owner === move.color,
-      fenBefore: move.fenBefore,
-      san: move.san,
-      bestSan: verdict.bestMoveSan,
-      classification: verdict.classification as MistakeEntry["classification"],
-      winBefore: verdict.winBefore,
-      winAfter: verdict.winAfter,
-      loss: Math.max(0, verdict.winBefore - verdict.winAfter),
-      phase: gamePhase(move.fenBefore),
-      clockMs: time?.remainingMs ?? null,
-      spentMs: time?.spentMs ?? null,
-      spentSource: time?.spentSource ?? null,
-      clockResolutionMs: clock?.resolutionMs ?? 1000,
-      initialMs: timeControl?.kind === "live" ? timeControl.initialMs : null,
-      date: record.date,
-      timeControl: record.timeControl,
-      opening: record.opening,
-    });
-  });
-  return entries;
+  // Facts are built only for flagged verdicts: most moves aren't, and the
+  // catalogue holds every flagged move of a whole library in memory.
+  return extractMoveFacts(record, analysis, (v) => isFlagged(v.classification)).flatMap((f) => (isFlagged(f.classification) ? [toMistakeEntry(f, f.classification)] : []));
 }
 
 export interface MistakeFilter {

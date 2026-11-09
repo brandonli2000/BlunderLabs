@@ -1,42 +1,16 @@
 import { describe, expect, it } from "vitest";
-import type { GameAnalysis, MoveVerdict } from "../analysis/gameAnalysis";
 import type { MoveClass } from "../core/classify";
 import { parseGame, splitPgn } from "../core/pgn";
+import { analysisFor } from "../test/analysisFixtures";
 import { fixture } from "../test/fakeFetch";
 import { toGameRecord } from "./gameRecord";
+import { extractMoveFacts } from "./moveFacts";
 import { extractMistakes, filterMistakes, ownerColor, sortMistakes, type MistakeEntry, type MistakeFilter } from "./mistakes";
 
 // Real Lichess game: thibault (White) vs SergeyB123, 300+3, 46 plies.
 const PGN = splitPgn(fixture("lichess-thibault-3.pgn"))[0]!;
 
-/** An analysis aligned with the game where chosen plies get chosen classes. */
-function analysisWith(classes: Record<number, MoveClass>): GameAnalysis {
-  const game = parseGame(PGN);
-  const moves: MoveVerdict[] = game.moves.map((m) => {
-    const cls = classes[m.ply] ?? "good";
-    const drop = { best: 0, good: 0.01, inaccuracy: 0.06, mistake: 0.12, blunder: 0.3 }[cls];
-    return {
-      ply: m.ply,
-      color: m.color,
-      san: m.san,
-      classification: cls,
-      winBefore: 0.6,
-      winAfter: 0.6 - drop,
-      accuracy: 50,
-      bestMoveSan: cls === "good" ? null : "Nf3",
-      bestMoveUci: null,
-    };
-  });
-  return {
-    positions: [game.startFen, ...game.moves.map((m) => m.fenAfter)].map((fen, ply) => ({ ply, fen, score: { cp: 0 }, bestMove: null, bestLine: [], depth: 14 })),
-    moves,
-    accuracy: { w: null, b: null },
-    limits: { depth: 14 },
-    refine: null,
-    refinedPositions: 0,
-    durationMs: 1,
-  };
-}
+const analysisWith = (classes: Record<number, MoveClass>) => analysisFor(PGN, classes);
 
 describe("extractMistakes", () => {
   it("extracts flagged moves with position, players, phase and clock context", async () => {
@@ -80,6 +54,35 @@ describe("extractMistakes", () => {
   it("marks ownership unknown for PGN uploads", async () => {
     const record = await toGameRecord(PGN.replace(/\[GameId[^\n]*\n/, "").replace(/lichess\.org/g, "example.org"), null, 0);
     expect(extractMistakes(record, analysisWith({ 19: "blunder" }))[0]!.byOwner).toBeNull();
+  });
+});
+
+describe("extractMistakes is a projection of extractMoveFacts", () => {
+  it("lists exactly the flagged facts, in the same order and with the same numbers", async () => {
+    const record = await toGameRecord(PGN, "lichess:thibault", 0);
+    const analysis = analysisWith({ 2: "best", 7: "inaccuracy", 16: "mistake", 19: "blunder", 22: "good", 41: "inaccuracy" });
+    const flaggedFacts = extractMoveFacts(record, analysis).filter((f) => ["inaccuracy", "mistake", "blunder"].includes(f.classification));
+    const entries = extractMistakes(record, analysis);
+    expect(entries.map((e) => [e.gameId, e.ply, e.classification, e.loss, e.byOwner, e.clockMs, e.phase])).toEqual(
+      flaggedFacts.map((f) => [f.gameId, f.ply, f.classification, f.loss, f.byOwner, f.clockMs, f.phase]),
+    );
+    expect(entries.length).toBe(4);
+  });
+
+  it("applies the same validity rules as the facts: a corrupted verdict hides the whole game", async () => {
+    const record = await toGameRecord(PGN, null, 0);
+    const analysis = analysisWith({ 19: "blunder" });
+    expect(extractMistakes(record, analysis)).toHaveLength(1);
+    const bad = { ...analysis, moves: analysis.moves.map((m, i) => (i === 3 ? { ...m, winBefore: NaN } : m)) };
+    expect(extractMistakes(record, bad)).toEqual([]);
+    const wrongPly = { ...analysis, moves: analysis.moves.map((m, i) => (i === 3 ? { ...m, ply: 40 } : m)) };
+    expect(extractMistakes(record, wrongPly)).toEqual([]);
+  });
+
+  it("does not credit anyone's moves when both sides match the imported name", async () => {
+    const mirror = PGN.replace('[Black "SergeyB123"]', '[Black "thibault"]');
+    const entries = extractMistakes(await toGameRecord(mirror, "lichess:thibault", 0), analysisFor(mirror, { 19: "blunder", 16: "mistake" }));
+    expect(entries.map((e) => e.byOwner)).toEqual([null, null]);
   });
 });
 
