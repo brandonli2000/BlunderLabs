@@ -46,6 +46,8 @@ export interface BatchProgress {
   current: { id: string; done: number; total: number } | null;
   /** Set when the last job finished, for a summary line. */
   finishedAt: number | null;
+  /** Why the job stopped on its own (e.g. storage full); cleared on the next start. */
+  error: string | null;
 }
 
 /** An engine failure is retried once on a fresh engine before the game is marked failed. */
@@ -60,7 +62,7 @@ const ENGINE_ATTEMPTS = 2;
 export class BatchRunner {
   private readonly deps: BatchDeps;
   private readonly listeners = new Set<(p: BatchProgress) => void>();
-  private progress: BatchProgress = { status: "idle", completed: 0, remaining: 0, failed: [], current: null, finishedAt: null };
+  private progress: BatchProgress = { status: "idle", completed: 0, remaining: 0, failed: [], current: null, finishedAt: null, error: null };
   private job: BatchJob | null = null;
   private abort: AbortController | null = null;
   private loop: Promise<void> | null = null;
@@ -154,11 +156,10 @@ export class BatchRunner {
       startedAt: this.job?.startedAt ?? now,
       updatedAt: now,
     };
-    await this.deps.saveJob(this.job);
-    this.update({ status: "running", finishedAt: null, failed: failedList(this.job) });
-
     const attempts = new Map<string, number>();
     try {
+      await this.deps.saveJob(this.job);
+      this.update({ status: "running", finishedAt: null, error: null, failed: failedList(this.job) });
       for (;;) {
         if (controller.signal.aborted) return;
         const queue = await this.queue();
@@ -181,21 +182,28 @@ export class BatchRunner {
       this.job = null;
       await this.deps.saveJob(null);
       this.update({ status: "idle", current: null, remaining: 0, finishedAt: this.deps.now() });
+    } catch (err) {
+      // Not a per-game problem (those are handled in analyzeOne): typically storage
+      // failing (quota). Retrying other games would fail the same way, so pause the
+      // job, keep it resumable, and say why.
+      const message = err instanceof Error ? err.message : String(err);
+      if (this.job) this.job = { ...this.job, status: "paused", updatedAt: this.deps.now() };
+      await this.deps.saveJob(this.job).catch(() => undefined);
+      this.update({ status: "paused", current: null, error: message });
     } finally {
       this.abort = null;
     }
   }
 
+  /** Per-game failures are returned; storage failures (load/save) propagate and pause the job. */
   private async analyzeOne(id: string, signal: AbortSignal): Promise<"done" | "aborted" | { message: string; retryable: boolean }> {
+    const pgn = await this.deps.loadGamePgn(id);
+    if (pgn === null) return "done"; // deleted meanwhile: nothing to do
+    let analysis: GameAnalysis;
     try {
-      const pgn = await this.deps.loadGamePgn(id);
-      if (pgn === null) return "done"; // deleted meanwhile: nothing to do
       const game = parseGame(pgn);
       this.update({ current: { id, done: 0, total: game.moves.length + 1 } });
-      const analysis = await this.deps.analyze(game, signal, (done, total) => this.update({ current: { id, done, total } }));
-      if (signal.aborted) return "aborted";
-      await this.deps.saveAnalysis(id, analysis);
-      return "done";
+      analysis = await this.deps.analyze(game, signal, (done, total) => this.update({ current: { id, done, total } }));
     } catch (err) {
       if (signal.aborted) return "aborted";
       const message = err instanceof Error ? err.message : String(err);
@@ -204,6 +212,9 @@ export class BatchRunner {
     } finally {
       this.update({ current: null });
     }
+    if (signal.aborted) return "aborted";
+    await this.deps.saveAnalysis(id, analysis);
+    return "done";
   }
 
   private async markFailed(id: string, message: string): Promise<void> {

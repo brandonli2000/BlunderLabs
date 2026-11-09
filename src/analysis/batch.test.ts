@@ -190,6 +190,22 @@ describe("BatchRunner", () => {
     expect(runner.state.status).toBe("locked");
   });
 
+  it("pauses the whole job with a reason when saving fails (e.g. storage full)", async () => {
+    const w = world(["a", "b", "c"]);
+    let saves = 0;
+    w.deps.saveAnalysis = async (id) => {
+      if (++saves >= 2) throw new Error("Browser storage is full. Delete some games to make room.");
+      w.saved.set(id, 1);
+    };
+    const runner = new BatchRunner(w.deps);
+    await runner.start();
+    expect(runner.state.status).toBe("paused");
+    expect(runner.state.error).toMatch(/storage is full/);
+    expect(runner.state.failed).toEqual([]); // not blamed on individual games
+    expect(w.getJob()?.status).toBe("paused");
+    expect(w.analyzeCalls).toEqual(["a", "b"]); // stopped instead of trying every game
+  });
+
   it("skips games deleted while the job runs, and cancel forgets the job", async () => {
     const w = world(["a", "b"]);
     w.behaviour.set("a", "hang");

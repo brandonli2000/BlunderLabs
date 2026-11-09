@@ -41,6 +41,11 @@ export function BatchPanel({ progress, games }: BatchPanelProps) {
         </p>
       )}
       {status === "paused" && <p className="batch-line">Paused · {remaining} left.</p>}
+      {progress.error && (
+        <p className="import-error" role="alert">
+          Stopped: {progress.error}
+        </p>
+      )}
       {status === "locked" && <p className="batch-line">Batch analysis is running in another BlunderLab tab.</p>}
 
       {status === "running" && (
