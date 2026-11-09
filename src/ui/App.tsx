@@ -1,4 +1,5 @@
 import { LibraryPage } from "./LibraryPage";
+import { MistakesPage } from "./MistakesPage";
 import { ReviewPage } from "./ReviewPage";
 import { useHashRoute } from "./route";
 import { useLibrary } from "./useLibrary";
@@ -22,14 +23,22 @@ export function App() {
           <a href="#/" className={route.view === "library" ? "nav-active" : undefined}>
             Library
           </a>
+          <a href="#/mistakes" className={route.view === "mistakes" ? "nav-active" : undefined}>
+            Mistakes
+          </a>
           <span className={route.view === "game" ? "nav-active" : "nav-disabled"}>Review</span>
         </nav>
       </header>
       <main>
-        {route.view === "library" ? (
-          <LibraryPage library={library} onOpen={(id) => navigate({ view: "game", id })} />
-        ) : (
-          <ReviewPage key={route.id} gameId={route.id} onAnalysisSaved={() => void library.refresh()} />
+        {route.view === "library" && <LibraryPage library={library} onOpen={(id) => navigate({ view: "game", id, ply: null })} />}
+        {route.view === "mistakes" && <MistakesPage games={library.games} />}
+        {route.view === "game" && (
+          <ReviewPage
+            key={`${route.id}/${route.ply ?? ""}`}
+            gameId={route.id}
+            initialPly={route.ply}
+            onAnalysisSaved={() => void library.refresh()}
+          />
         )}
       </main>
     </div>

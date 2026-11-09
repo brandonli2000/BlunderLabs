@@ -23,10 +23,12 @@ type Loaded =
 
 interface ReviewPageProps {
   gameId: string;
+  /** Main-line ply to open at (from #/game/<id>/<ply>), clamped to the game. */
+  initialPly: number | null;
   onAnalysisSaved: () => void;
 }
 
-export function ReviewPage({ gameId, onAnalysisSaved }: ReviewPageProps) {
+export function ReviewPage({ gameId, initialPly, onAnalysisSaved }: ReviewPageProps) {
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
 
   useEffect(() => {
@@ -56,11 +58,21 @@ export function ReviewPage({ gameId, onAnalysisSaved }: ReviewPageProps) {
       </div>
     );
   }
-  return <Review record={loaded.record} game={loaded.game} onAnalysisSaved={onAnalysisSaved} />;
+  return <Review record={loaded.record} game={loaded.game} initialPly={initialPly} onAnalysisSaved={onAnalysisSaved} />;
 }
 
-function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: ParsedGame; onAnalysisSaved: () => void }) {
-  const [ply, setPly] = useState(0);
+function Review({
+  record,
+  game,
+  initialPly,
+  onAnalysisSaved,
+}: {
+  record: GameRecord;
+  game: ParsedGame;
+  initialPly: number | null;
+  onAnalysisSaved: () => void;
+}) {
+  const [ply, setPly] = useState(() => Math.max(0, Math.min(game.moves.length, initialPly ?? 0)));
   const [orientation, setOrientation] = useState<Color>(() => defaultOrientation(record));
   const [variation, setVariation] = useState<Variation | null>(null);
   const [selected, setSelected] = useState<string | null>(null);

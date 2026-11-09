@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type Route = { view: "library" } | { view: "game"; id: string };
+export type Route = { view: "library" } | { view: "mistakes" } | { view: "game"; id: string; ply: number | null };
 
-/** `#/` → library, `#/game/<id>` → review. Hash routing works on any static host. */
+/** `#/` library · `#/mistakes` catalogue · `#/game/<id>[/<ply>]` review. Works on any static host. */
 export function parseHash(hash: string): Route {
-  const match = hash.match(/^#\/game\/(.+)$/);
+  if (hash === "#/mistakes") return { view: "mistakes" };
+  const match = hash.match(/^#\/game\/([^/]+)(?:\/(\d{1,4}))?$/);
   if (match) {
     try {
-      return { view: "game", id: decodeURIComponent(match[1]!) };
+      return { view: "game", id: decodeURIComponent(match[1]!), ply: match[2] ? Number(match[2]) : null };
     } catch {
       // Malformed escape sequence: fall through to the library.
     }
@@ -16,7 +17,9 @@ export function parseHash(hash: string): Route {
 }
 
 export function routeHash(route: Route): string {
-  return route.view === "game" ? `#/game/${encodeURIComponent(route.id)}` : "#/";
+  if (route.view === "mistakes") return "#/mistakes";
+  if (route.view === "game") return `#/game/${encodeURIComponent(route.id)}${route.ply !== null ? `/${route.ply}` : ""}`;
+  return "#/";
 }
 
 export function useHashRoute(): [Route, (route: Route) => void] {
