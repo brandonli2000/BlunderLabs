@@ -17,6 +17,8 @@ const fakeAnalysis = (durationMs = 1): GameAnalysis => ({
   moves: [],
   accuracy: { w: 90, b: 80 },
   limits: { depth: 14 },
+  refine: null,
+  refinedPositions: 0,
   durationMs,
 });
 
@@ -101,7 +103,7 @@ describe("analyses", () => {
 describe("schema", () => {
   it("creates the current schema version with expected stores and indexes", () => {
     expect(db.version).toBe(DB_VERSION);
-    expect([...db.objectStoreNames].sort()).toEqual(["analyses", "games"]);
+    expect([...db.objectStoreNames].sort()).toEqual(["analyses", "games", "jobs"]);
     const tx = db.transaction(["games", "analyses"]);
     expect([...tx.objectStore("games").indexNames].sort()).toEqual(["importedAt", "importedFor"]);
     expect([...tx.objectStore("analyses").indexNames]).toEqual(["gameId"]);

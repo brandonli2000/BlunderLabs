@@ -10,7 +10,7 @@
 
 export const DB_NAME = "blunderlab";
 
-export const STORES = { games: "games", analyses: "analyses" } as const;
+export const STORES = { games: "games", analyses: "analyses", jobs: "jobs" } as const;
 
 type Migration = (db: IDBDatabase, tx: IDBTransaction) => void;
 
@@ -23,6 +23,10 @@ const MIGRATIONS: Migration[] = [
     const analyses = db.createObjectStore(STORES.analyses, { keyPath: ["gameId", "engineKey"] });
     analyses.createIndex("gameId", "gameId");
   },
+  // v2: background job state (batch analysis), keyed by job id.
+  (db) => {
+    db.createObjectStore(STORES.jobs, { keyPath: "id" });
+  },
 ];
 
 export const DB_VERSION = MIGRATIONS.length;
@@ -31,18 +35,19 @@ export class StorageError extends Error {
   override name = "StorageError";
 }
 
-export function openDatabase(name: string = DB_NAME, factory: IDBFactory = indexedDB): Promise<IDBDatabase> {
+/** `version` exists for migration tests (open at an old schema); the app always uses the latest. */
+export function openDatabase(name: string = DB_NAME, factory: IDBFactory = indexedDB, version: number = DB_VERSION): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     let request: IDBOpenDBRequest;
     try {
-      request = factory.open(name, DB_VERSION);
+      request = factory.open(name, version);
     } catch {
       reject(new StorageError("This browser doesn't allow local storage (private mode?). Games can't be saved."));
       return;
     }
     request.onupgradeneeded = (event) => {
       const tx = request.transaction!;
-      for (let v = event.oldVersion; v < DB_VERSION; v++) MIGRATIONS[v]!(request.result, tx);
+      for (let v = event.oldVersion; v < version; v++) MIGRATIONS[v]!(request.result, tx);
     };
     request.onsuccess = () => {
       const db = request.result;

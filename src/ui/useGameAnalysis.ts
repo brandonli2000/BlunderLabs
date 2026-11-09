@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { analysisEngineKey, analyzeGame, DEFAULT_LIMITS, type GameAnalysis } from "../analysis/gameAnalysis";
+import { analysisEngineKey, analyzeGame, DEFAULT_PLAN, type GameAnalysis } from "../analysis/gameAnalysis";
 import type { ParsedGame } from "../core/pgn";
-import { getAnalysis, saveAnalysis } from "../storage/library";
+import { getLatestAnalysis, saveAnalysis } from "../storage/library";
 import { getDatabase } from "./database";
 import { getEngine } from "./engineInstance";
 
@@ -11,7 +11,7 @@ export type AnalysisState =
   | { status: "done"; analysis: GameAnalysis; saveError: string | null }
   | { status: "error"; message: string };
 
-const ENGINE_KEY = analysisEngineKey(DEFAULT_LIMITS);
+const ENGINE_KEY = analysisEngineKey(DEFAULT_PLAN.limits, DEFAULT_PLAN.refine);
 
 /**
  * Full-game analysis for one stored game: restores a saved analysis on
@@ -25,7 +25,7 @@ export function useGameAnalysis(gameId: string, game: ParsedGame | null, onSaved
     let cancelled = false;
     void (async () => {
       try {
-        const stored = await getAnalysis(await getDatabase(), gameId, ENGINE_KEY);
+        const stored = await getLatestAnalysis(await getDatabase(), gameId);
         if (!cancelled && stored) setState({ status: "done", analysis: stored.analysis, saveError: null });
       } catch {
         // Unreadable cache is not fatal; the user can re-analyse.
@@ -56,9 +56,9 @@ export function useGameAnalysis(gameId: string, game: ParsedGame | null, onSaved
     let analysis: GameAnalysis;
     try {
       analysis = await analyzeGame(getEngine("analysis"), game, {
-        limits: DEFAULT_LIMITS,
+        ...DEFAULT_PLAN,
         signal: controller.signal,
-        onProgress: (done) => setState({ status: "running", done, total }),
+        onProgress: (done, planned) => setState({ status: "running", done, total: planned }),
       });
     } catch (err) {
       if (!controller.signal.aborted) setState({ status: "error", message: err instanceof Error ? err.message : String(err) });

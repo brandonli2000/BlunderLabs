@@ -92,7 +92,13 @@ export async function getAnalysis(db: IDBDatabase, gameId: string, engineKey: st
   const stored = await promisify<StoredAnalysis | undefined>(
     db.transaction(STORES.analyses).objectStore(STORES.analyses).get([gameId, engineKey]),
   );
-  return stored && stored.format === ANALYSIS_FORMAT ? stored : null;
+  return stored && stored.format === ANALYSIS_FORMAT ? normalize(stored) : null;
+}
+
+/** Analyses saved before the refine fields existed are uniform single-pass ones. */
+function normalize(stored: StoredAnalysis): StoredAnalysis {
+  const a = stored.analysis as Partial<GameAnalysis> & GameAnalysis;
+  return { ...stored, analysis: { ...a, refine: a.refine ?? null, refinedPositions: a.refinedPositions ?? 0 } };
 }
 
 /** Ids of games that have at least one stored analysis (any settings). */
@@ -100,4 +106,46 @@ export async function analyzedGameIds(db: IDBDatabase): Promise<Set<string>> {
   const index = db.transaction(STORES.analyses).objectStore(STORES.analyses).index("gameId");
   const keys = await promisify(index.getAllKeys());
   return new Set(keys.map((k) => (k as [string, string])[0]));
+}
+
+/** Game ids, most recently imported first. Cheap: reads keys only, not PGNs. */
+export async function gameIdsNewestFirst(db: IDBDatabase): Promise<string[]> {
+  const index = db.transaction(STORES.games).objectStore(STORES.games).index("importedAt");
+  const ids = await promisify(index.getAllKeys());
+  return (ids as string[]).reverse();
+}
+
+/**
+ * The most recent stored analysis of a game under any engine settings, so
+ * changing the default settings doesn't hide existing analyses.
+ */
+export async function getLatestAnalysis(db: IDBDatabase, gameId: string): Promise<StoredAnalysis | null> {
+  const index = db.transaction(STORES.analyses).objectStore(STORES.analyses).index("gameId");
+  const all = await promisify<StoredAnalysis[]>(index.getAll(gameId));
+  const valid = all.filter((s) => s.format === ANALYSIS_FORMAT && isAnalysisShape(s.analysis)).sort((a, b) => b.createdAt - a.createdAt);
+  return valid[0] ? normalize(valid[0]) : null;
+}
+
+/** Structural check for data read back from storage (it may be old or corrupted). */
+export function isAnalysisShape(value: unknown): value is GameAnalysis {
+  const a = value as Partial<GameAnalysis> | null;
+  return (
+    !!a &&
+    Array.isArray(a.positions) &&
+    Array.isArray(a.moves) &&
+    a.positions.length === a.moves.length + 1 &&
+    a.moves.every((m) => typeof m?.winBefore === "number" && typeof m.winAfter === "number" && typeof m.classification === "string")
+  );
+}
+
+/** Newest valid analysis per game, for cross-game views (one read of the whole store). */
+export async function latestAnalysesByGame(db: IDBDatabase): Promise<Map<string, StoredAnalysis>> {
+  const all = await promisify<StoredAnalysis[]>(db.transaction(STORES.analyses).objectStore(STORES.analyses).getAll());
+  const latest = new Map<string, StoredAnalysis>();
+  for (const stored of all) {
+    if (stored.format !== ANALYSIS_FORMAT || !isAnalysisShape(stored.analysis)) continue;
+    const prev = latest.get(stored.gameId);
+    if (!prev || stored.createdAt > prev.createdAt) latest.set(stored.gameId, normalize(stored));
+  }
+  return latest;
 }

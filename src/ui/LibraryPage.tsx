@@ -1,3 +1,6 @@
+import { useEffect } from "react";
+import { BatchPanel } from "./BatchPanel";
+import { getBatchRunner, useBatch } from "./batchInstance";
 import { GameList } from "./GameList";
 import { ImportPanel } from "./ImportPanel";
 import { formatBytes } from "./database";
@@ -10,6 +13,15 @@ interface LibraryPageProps {
 
 export function LibraryPage({ library, onOpen }: LibraryPageProps) {
   const { games, analyzed, usageBytes, error, refresh, remove } = library;
+  const batch = useBatch();
+
+  // Show "SF" tags as batch analyses land, and keep the batch's remaining count in step with the library.
+  useEffect(() => {
+    if (batch.completed > 0) void refresh();
+  }, [batch.completed, refresh]);
+  useEffect(() => {
+    void getBatchRunner().refresh();
+  }, [games]);
 
   return (
     <div className="library">
@@ -20,6 +32,7 @@ export function LibraryPage({ library, onOpen }: LibraryPageProps) {
             if (openId) onOpen(openId);
           }}
         />
+        {games && <BatchPanel progress={batch} games={games} />}
         <p className="hint privacy-note">
           Your games and analyses are stored only in this browser (IndexedDB). Nothing is uploaded.
         </p>
