@@ -136,3 +136,71 @@ escaping), never as HTML.
 no automatic retry, to avoid hammering the APIs.
 **Not handled:** private Lichess games need OAuth. That's acceptable because the product
 targets the user's own public games.
+
+## D-015 · 2026-11-08 · Clock data is derived from the stored PGN, not stored separately
+**Decision:** `parseGame` attaches `clockMs` (from `[%clk]`) to each move, and
+`computeGameClock` derives time spent. Nothing new is persisted.
+**Why:** The PGN is already the source of truth; a second copy could drift, and a parsing
+fix would otherwise need a data migration. Parsing costs a few ms per game (benchmarked).
+**Rules:** spent = previous own clock − this clock + increment (clocks are recorded after
+the increment). Each side's first move is unmeasured (neither site runs the clock yet).
+Values are `measured` when the increment is known, and `estimated` (increment assumed 0)
+when the TimeControl header is missing. Negative results beyond the clock's resolution
+(e.g. opponent-granted time) are reported as `inconsistent`, never guessed.
+Correspondence games get no think time. Resolution (1 s vs 0.1 s) is kept with the data.
+**Non-goal:** clock values are facts about the clock. BlunderLab must not label them as
+emotions or mental states ("panicked", "rushed").
+
+## D-016 · 2026-11-08 · Batch analysis: storage is the queue
+**Decision:** The batch runner has no persisted queue. The queue is "games without any
+stored analysis", recomputed before each game, minus the job's recorded failures. A small
+`jobs` record (schema v2) stores only status (running/paused) and failures.
+**Why:** Each completed analysis is saved the moment it finishes, so a crash or reload
+loses at most the game in progress, and there's no queue state to corrupt or get out of
+sync with imports and deletions.
+**Concurrency:** batch uses its own worker (`getEngine("batch")`), so pausing or cancelling
+never `stop`s a search belonging to single-game analysis or live exploration (stopping
+a shared worker would silently return a shallower result). Duplicate jobs are prevented
+in-tab (one runner and one loop) and across tabs (Web Locks, `ifAvailable`). Without Web
+Locks support, only the in-tab guard applies.
+**Honesty:** analysis runs only while a tab is open. A job that was running when the page
+closed is shown as "interrupted" and resumes only when the user clicks Resume.
+**Failures:** an EngineError is retried once on a fresh worker (dead workers are replaced
+automatically), and unreadable PGNs fail immediately. Failures are listed with a Retry action.
+
+## D-017 · 2026-11-08 · Mistake catalogue computed on demand
+**Decision:** The catalogue is derived when the view opens, from the newest valid analysis
+per game plus the game's PGN (for positions, clocks, phase). There's no mistakes store yet.
+**Why:** It can't go stale, and the extraction logic can change without a migration.
+Measured build time is shown in the UI. If it becomes slow for large libraries,
+materialize it into a store keyed by `[gameId, ply]` (a v3 migration).
+**Safety:** if a stored analysis doesn't line up with its game (move count or SAN
+mismatch), that game contributes nothing rather than attaching verdicts to the wrong moves.
+**Scope:** the catalogue says where expected score was lost and in what context (phase,
+clock). It does not claim causes; that is Phase 3.
+
+## D-018 · 2026-11-08 · Game phase heuristic adapted from Lichess' Divider
+**Decision:** endgame when at most 6 minor/major pieces remain; middlegame when at most 10
+remain or a side has fewer than 4 pieces on its back rank; otherwise opening. Adapted from
+Lichess' open-source Divider, without its mixedness score. It is labelled a heuristic.
+
+## D-019 · 2026-11-08 · Backup format and merge-only restore
+**Decision:** Backups are JSON `{ format: "blunderlab-backup", version, exportedAt, games,
+analyses }`. Restore validates (rebuilding each game record from its PGN), previews, then
+applies with `add()` in one transaction. It never overwrites or deletes. Files from a newer
+format version are refused with an "update the app" message, and older versions will get
+explicit upgrade steps. Jobs are not backed up (they're transient).
+**Alternatives:** "replace library" restore (simpler, but a wrong file destroys data);
+per-record transactions (a partial restore on failure).
+**Persistence:** `navigator.storage.persist()` is requested only when the user clicks, with an
+explanation. Browsers decide whether to grant it, and the UI says so honestly.
+
+## D-020 · 2026-11-08 · Playwright E2E with recorded fixtures and real Stockfish
+**Decision:** E2E tests run the real app in Chromium: real Stockfish worker, real IndexedDB,
+a fresh browser context per test. Lichess/Chess.com are always intercepted (`page.route`),
+and any unexpected real API call returns HTTP 599 so it fails loudly. Any page console
+error fails the test.
+**Why real Stockfish:** short fixture games analyse in seconds, and the engine/worker
+integration is exactly what unit tests can't cover. Chromium only, for now; Firefox and WebKit
+would mainly add CI time until there are browser-specific features.
+**CI:** a separate `e2e` job; the HTML report is uploaded on failure.

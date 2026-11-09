@@ -68,7 +68,7 @@ The original-algorithm work needs evaluation methods, not just implementations:
 
 Status legend: ✅ done · 🟡 in progress · ⬜ planned
 
-### Phase 1: Foundation: import, analysis, review (🟡 current)
+### Phase 1: Foundation: import, analysis, review (✅ functionally complete; deployment pending)
 Goal: a reliable, pleasant single-game review tool that everything else builds on.
 - ✅ PGN parsing (multi-game files, comments/variations ignored, FEN starts)
 - ✅ Stockfish 19 in the browser (WASM worker) with a tested UCI wrapper
@@ -76,22 +76,29 @@ Goal: a reliable, pleasant single-game review tool that everything else builds o
 - ✅ Review UI: board, move list, navigation, eval graph, best-move arrow, verdicts
 - ✅ Import from Lichess and Chess.com by username (public APIs, browser-side)
 - ✅ Local game library (IndexedDB): persist games and analyses, list/filter/delete
-- 🟡 Interactive board: click-to-move variation exploration with live engine lines
-  (no drag-and-drop or keyboard move entry yet)
+- ✅ Interactive board: click-to-move and typed (SAN) moves, variations, promotion choice,
+  live engine lines (drag-and-drop not yet)
+- ✅ Library backup/restore (versioned JSON, merge-only, validated) + persistent-storage request
+- ✅ End-to-end tests (Playwright, recorded API fixtures, real Stockfish) in CI
 - ✅ Reproducible benchmarks (Node + browser harness, `bench/`)
 - ⬜ Original piece set (replacing interim Unicode glyphs)
 - ⬜ Analysis quality: MultiPV for "only move" detection, configurable depth, cache by FEN
-- 🟡 Continuous integration (workflow file written; activates once pushed to GitHub)
+- ✅ Continuous integration on GitHub Actions (typecheck, unit, build, E2E)
 - ⬜ Deployment pipeline (static hosting) + licence decision (see DECISIONS D-004) → milestone I-1
 - ⬜ Basic privacy-respecting usage telemetry *only if* opt-in and documented (needed for I-4)
 
-### Phase 2: Player profile and mistake mining
+### Phase 2: Player profile and mistake mining (🟡 current)
 Goal: move from single games to patterns across many games.
-- Batch analysis of imported game collections (background queue, resumable)
-- Per-player dashboard: accuracy by phase, colour, opening, time control and clock time
-- Mistake catalogue: every inaccuracy/mistake/blunder with position, context and clock
-- First **tactical motif detectors** (hanging piece, fork, pin, back-rank, missed capture,
-  missed mate), as pure functions over positions + engine PVs, with tests
+- ✅ Per-move clock times from `[%clk]` (measured vs estimated, explicit gaps)
+- ✅ Batch analysis of imported collections (resumable, pausable, crash-tolerant, one tab at a time)
+- ✅ Mistake catalogue v0: every flagged move with position, phase, clock; filters; links to review
+- 🟡 Analysis-strategy experiment (shallow pass + selective deepening vs uniform depth),
+  measured against a depth-18 reference before any methodology change
+- ⬜ Per-player improvement profile: rates with Wilson intervals by phase, colour, time
+  class and clock bucket; explicit player identity (design: `docs/design/0001-…`)
+- ⬜ First **tactical motif detectors**: hanging piece and missed capture via legal SEE +
+  engine-line agreement, validated on a hand-labelled set (design 0001); later forks, pins,
+  back-rank, missed mate
 
 ### Phase 3: Diagnosis engine (core differentiator)
 Goal: explain *why*, with evidence and confidence.

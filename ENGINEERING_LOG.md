@@ -103,3 +103,61 @@ search is cut short.
 ### 2026-11-08 · Bug · Missing PGN dates stored as "????.??.??"
 chess.js fills absent Seven-Tag-Roster headers with placeholders, so headerless PGNs got
 the date `????.??.??`. Found by a unit test; dates without digits are now stored as null.
+
+### 2026-11-08 · Design · Clock data without guessing (session 3)
+`[%clk]` gives the clock *after* a move, including the increment, so time spent is
+`previous own clock − this clock + increment`. Real-data edge cases the parser had to
+respect: neither site runs the clock on each side's first move (it shows the starting
+time, so "spent" would be fiction); Lichess records whole seconds and Chess.com tenths
+(so the resolution is kept and shown as ±1 s); a player can be *given* time by the opponent,
+making the clock go up (reported as `inconsistent`, not clamped to 0); correspondence clocks
+aren't think time. Values are labelled `measured` vs `estimated` (no TimeControl header,
+increment assumed 0). Verified against the recorded Lichess game: 10.h4 shows 4:16
+remaining and 26 s spent (4:39 → 4:16 with +3).
+
+### 2026-11-08 · Design · Batch analysis where storage is the queue (session 3)
+A persisted queue would have to stay in sync with imports and deletions and could be
+left half-written by a crash. Instead the queue is recomputed before every game as "games
+without any stored analysis" minus recorded failures, and each analysis is saved the moment
+it finishes. A reload therefore loses at most one game's work, and there's no queue to
+corrupt. A subtle hazard drove the worker layout: `UciEngine.stop()` makes the *current*
+search return early with a shallower result. If batch and single-game analysis shared a
+worker, pausing one could silently degrade the other's evaluations, so each role has its
+own worker. Covered by 11 runner tests (pause, interrupted reload, crash retry, unreadable
+PGN, duplicate start, cross-tab lock, deletion mid-run, storage failure).
+
+### 2026-11-08 · Bug · A full disk would have failed every game in the batch (session 3)
+Found by re-reading the runner: a `saveAnalysis` error (e.g. QuotaExceededError) was caught
+as a per-game failure, so the runner would analyse and "fail" every remaining game one
+after another. Storage errors now propagate out of the per-game handler and pause the job
+with the reason shown, keeping it resumable. A regression test asserts the runner stops
+after the first failed save and blames no individual game.
+
+### 2026-11-08 · Design · Restore that cannot destroy data (session 4)
+Backups restore by *merging*. The restore is planned first (pure read, shown to the user as
+a preview), then applied in one IndexedDB transaction using `add()` rather than `put()`.
+`add()` fails on an existing key instead of overwriting it, and any failure aborts the
+whole transaction, so a restore is all-or-nothing and can never overwrite or delete. The
+test simulates the realistic race (the same game imported in another tab between preview
+and restore): the restore fails and the database is byte-for-byte unchanged. Validation
+re-parses every PGN and recomputes its id, so a hand-edited backup can't plant a record
+whose id disagrees with its content.
+
+### 2026-11-08 · Bug · Promotion square listed four times (session 4)
+The first Playwright run printed React "duplicate key `te8`" warnings: a pawn on the 7th
+rank has four legal moves to the same square (one per promotion piece), and
+`legalDestinations` returned all four. It was harmless visually but meant React could drop
+or duplicate board elements. Fixed by de-duplicating, with a unit regression test. To catch
+this class of bug automatically, every E2E test now fails on any page console error.
+
+### 2026-11-08 · Bug · Board overflowed laptop screens (session 4)
+An E2E test clicking e1 failed: at 1280×720 the bottom rank sat below the fold, so the
+click never reached the board. That was a real usability problem (common laptop height),
+not just a test issue. The board is now sized to `min(640px, 100%, 100vh − 210px)`, and the
+test helper clicks through the element so Playwright scrolls it into view.
+
+### 2026-11-08 · Measurement · Test suite (session 4)
+140 unit/integration tests (Vitest, includes real-Stockfish tests) in ~2 s; 14 Playwright
+E2E tests in Chromium in ~38 s locally (3 workers), stable across a `--repeat-each=2` run
+(26/26). Catalogue build time shown in-app: 12 ms for one analysed 46-ply game (Chrome,
+same machine as earlier benchmarks).
