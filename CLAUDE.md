@@ -26,6 +26,27 @@ portfolio project for university admissions (especially Waterloo CS/SE). That me
   plainly so the owner can discuss and defend it. Record it in `DECISIONS.md` and, when
   it involved a real challenge, bug or measurement, in `ENGINEERING_LOG.md`.
 
+## Long-term scope and ambition
+
+BlunderLab is intentionally a large, ambitious software engineering project intended for
+continuous development over many months, potentially years.
+
+- Do not interpret early MVP milestones as the final scope of the product.
+- Maintain an ambitious long-term technical roadmap with opportunities for original
+  algorithm design, computational experimentation, sophisticated personalized learning
+  systems, performance engineering, and measurable real-world impact.
+- Avoid prematurely declaring the project complete or simplifying its ultimate vision
+  merely to accelerate development.
+- At the same time, do not introduce artificial complexity, unnecessary frameworks, or
+  elaborate features without clear engineering or product justification.
+- Periodically evaluate whether development is progressing toward the project's most
+  technically challenging and distinctive objectives, rather than becoming a collection of
+  ordinary chess website features.
+
+Overarching objective: an original, useful, technically substantial and rigorously
+evaluated software product that provides compelling, genuine evidence of engineering
+ability for competitive university admissions.
+
 ## Session protocol (mandatory)
 
 **Start of session**
