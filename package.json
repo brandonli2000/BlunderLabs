@@ -15,7 +15,9 @@
     "check": "tsc --noEmit && vitest run",
     "bench": "vitest run --config bench/vitest.config.ts bench/node.bench.ts",
     "bench:strategy": "vitest run --config bench/vitest.config.ts bench/strategy.bench.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "tactics:dataset": "vitest run --config bench/vitest.config.ts bench/tactics/build-dataset.bench.ts",
+    "tactics:evaluate": "vitest run --config bench/vitest.config.ts bench/tactics/evaluate.bench.ts"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

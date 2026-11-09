@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BlunderLab labeling</title>
+    <style>
+      .label-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+      .label-bar .text-input { width: auto; }
+      .label-main { display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 24px; align-items: start; }
+      .label-side { display: flex; flex-direction: column; gap: 10px; }
+      @media (max-width: 900px) { .label-main { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/bench/tactics/label.tsx"></script>
+  </body>
+</html>
