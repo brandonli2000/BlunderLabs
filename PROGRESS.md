@@ -1,63 +1,83 @@
 # BlunderLab progress
 
-_Last updated: 2026-11-08 (session 1)_
+_Last updated: 2026-11-08 (session 2)_
 
 **Current phase:** Phase 1 (Foundation). See ROADMAP.md.
-**Health:** `npm run check` → typecheck clean, 37/37 tests pass · `npm run build` OK ·
-manually verified in Chrome (dark theme).
+**Health:** `npm run check` → typecheck clean, 84/84 tests pass · `npm run build` OK ·
+`npm run bench` OK · main flows manually verified in Chrome 157 against the live
+Lichess and Chess.com APIs.
 
 ## Implemented and verified ✅
-- Project scaffold: Vite 8 + React 19 + TS 7 strict + Vitest 5; git repo initialized.
-- PGN: multi-game splitting (BOM/CRLF safe), parsing with headers, FEN starts; comments,
-  NAGs and variations ignored. Illegal moves raise `PgnError`. (unit tests)
-- UCI parsing: info lines (cp/mate, bounds, multipv, empty PV at terminal positions),
-  bestmove incl. `(none)`. (unit tests)
-- `UciEngine`: handshake, queued searches, MultiPV, stop, terminate (rejects pending).
-  (integration tests on real Stockfish: mate-in-1 both colours, checkmate, stalemate,
-  MultiPV ordering, concurrent calls)
-- Evaluation: White-POV scores, win probability (Lichess curve), formatting. (unit tests)
-- Classification: best/good/inaccuracy/mistake/blunder by expected-score loss; move and
-  game accuracy. (unit tests; Scholar's-mate integration test flags 3…Nf6?? correctly)
-- Review UI (manually tested in Chrome): paste/open-file/sample import, game picker for
-  multi-game files, SVG board with coordinates, last-move highlight, best-move arrow,
-  classification marker on the board, move list with glyphs and colours, eval graph with
-  click-to-seek, player strips with accuracy and error counts, keyboard navigation
-  (←/→/Home/End, F to flip), progress bar with cancel, light and dark themes.
+- **Core** (unit tests): PGN split/parse (multi-game, FEN starts, comments/variations
+  ignored), White-POV scores, win probability, move classification, accuracy, FEN reading,
+  legal moves / promotion / castling / en passant (`core/moves.ts`), PV → SAN, move numbering.
+- **Engine** (real-Stockfish integration tests): `UciEngine` (queued searches, MultiPV,
+  stop, terminate, init timing); `LatestSearch` (latest-wins live analysis); Node transport
+  supports multiple engines per process.
+- **Analysis:** full-game grading at depth 14, timing recorded, cache key per engine build + depth.
+- **Username import** (tests replay recorded real API responses; manually verified live):
+  - Lichess: streamed export with live progress; standard speeds only.
+  - Chess.com: monthly archives newest-first, serial requests, capped at 24 archives,
+    variants filtered out.
+  - Errors: invalid username (no request made), unknown/closed account, no games,
+    HTTP 429, other HTTP errors, network failure, stream dropped mid-download, cancel.
+  - Live check: 25 Lichess games (thibault) in 1.0 s; 10 Chess.com games (hikaru);
+    re-import → "0 new · 25 already in library"; unknown user → clear error.
+- **PGN import:** paste / file / sample, into the same library with the same dedup.
+- **Library (IndexedDB):** games + analyses survive reloads (verified in Chrome); dedup
+  across imports and across sources (same Lichess game via API or PGN file); delete with
+  inline confirm cascades to analyses (verified: 34 games / 0 analyses after deleting an
+  analysed game); filter box; storage usage display; schema migrations framework; quota
+  error message. (storage tests via fake-indexeddb)
+- **Review:** loads from the library by URL (`#/game/<id>`); saved analysis appears instantly
+  after reload; board orientation follows the imported player's colour.
+- **Variation exploration** (manually verified): click a piece, then a square; legal-move
+  dots; a non-game move starts a variation; playing the game's own move just advances;
+  ←/→ step through the variation; Esc / "Back to game" returns; live MultiPV-3 Stockfish
+  lines to depth 18 on a separate worker, with a best-move arrow.
+- **Benchmarks:** `bench/` workload (6 real games) with Node and browser harnesses; results
+  in `bench/results/` and ENGINEERING_LOG.
 
 ## Partially implemented 🟡
-- Board is view-only: no move input or variation exploration yet.
-- Pieces are interim Unicode glyphs (rendering depends on the system font).
-- Move list scrolls the active move into view with `scrollIntoView`, which may also
-  scroll the page on small screens. Needs a container-only scroll.
-- Light theme was only checked via CSS review, not visually in a browser this session.
+- Promotion picker: logic unit-tested, UI **not exercised in the browser** yet.
+- Board input is click-only: no drag-and-drop and no keyboard move entry (an accessibility gap).
+- Variations are one level deep (no sub-variations) and are lost on navigation or reload (by design for now).
+- Browser benchmark numbers come from an automation-attached Chrome and look pessimistic
+  (see ENGINEERING_LOG); they need a clean re-run.
+- Chess.com opening names (from `ECOUrl`) only apply to games imported after this
+  change. Records saved earlier keep the ECO code until re-imported.
+- Pieces are still interim Unicode glyphs.
+- Light theme not visually checked in a browser (only dark).
 
 ## Known bugs / risks
-- No automated UI tests yet (component/E2E). UI regressions are caught only manually.
+- No automated UI/E2E tests; UI regressions are caught only manually.
+- `navigator.storage.persist()` not requested, so the browser may evict the library under
+  storage pressure. There's no export/backup yet.
 - Licence undecided (DECISIONS D-004): **blocks public deployment**.
-- Analysis is not persisted; reloading the page loses it.
-- CI workflow is written but has never run (no GitHub remote yet).
+- CI workflow is written but has never run (no GitHub remote).
+- Import parsing costs ~4–11 ms/game (chess.js); fine for 100 games, worth profiling for
+  bulk imports of thousands.
+- Full analysis takes ~5–20 s per game in the browser at depth 14, too slow for
+  batch analysis of many games (Phase 2).
 
 ## Next session: concrete tasks (in priority order)
-_Ordered by the admissions-focused criteria in ROADMAP.md: the foundation for real users
-and for cross-game mistake mining comes first._
-0. **Owner decisions:** licence (DECISIONS D-004) and whether/when to create the GitHub
-   repo (CI is already written in `.github/workflows/ci.yml`). Both block milestone I-1.
-1. **Lichess import by username**: `src/import/lichess.ts`. Use
-   `GET https://lichess.org/api/games/user/{name}?max=N&pgnInJson=false&clocks=true`
-   (`Accept: application/x-chess-pgn`), stream the response, reuse `splitPgn`/`parseGame`.
-   Unit-test the parsing with a recorded fixture; do not hit the network in tests.
-2. **Chess.com import**: `https://api.chess.com/pub/player/{name}/games/archives`, then
-   monthly archives (`games[].pgn`). Same fixture-based testing.
-3. Import UI: a username + source picker in ImportPanel, listing recent games to choose from.
-4. **Persistence**: `src/storage/` on IndexedDB (games + analyses keyed by game id and
-   engine settings), and a simple library view.
-5. Parse `[%clk]` comments into per-move clock times (needed for the time-pressure
-   diagnosis later). chess.js `getComments()` exposes them.
-6. Interactive board (click-to-move, variation exploration with live engine lines).
-7. Benchmark script for analysis throughput (positions/sec at depth 14); record the
-   result in ENGINEERING_LOG.md.
-8. Deploy a public alpha (static host) once the licence is decided → milestone I-1.
-9. Original SVG piece set; then component tests (Testing Library) for MoveList/Board.
+0. **Owner decisions** (not blocking local work): licence and GitHub repo. See the session-2
+   summary recommendations.
+1. **Per-move clock times:** parse `[%clk h:mm:ss(.s)]` comments (both sites send them;
+   chess.js `getComments()` returns them keyed by FEN) into `GameMove.clockMs`, and show
+   time spent per move in the move list. This is the first diagnostic signal beyond engine
+   loss (time pressure). Bump `ANALYSIS_FORMAT` only if the analysis shape changes.
+2. **Batch analysis queue** (Phase 2 foundation): "Analyse all unanalysed games" in the
+   library, running in the background with progress, resumable after reload, cancellable.
+   Re-measure throughput in a clean Chrome first, then decide on faster strategies
+   (e.g. a shallow pass plus selective deepening).
+3. **Mistake catalogue v0:** after batch analysis, list every mistake/blunder by the
+   imported player across games (position, eval swing, phase, clock). It's the raw
+   material for Phase 3 diagnosis.
+4. Export/backup of the library (JSON download) + request persistent storage.
+5. Drag-and-drop and keyboard move input; exercise the promotion picker in the browser.
+6. Component/E2E tests (Playwright) for import → review → explore.
+7. Original SVG piece set.
 
 ## Session log
 - **2026-11-08 · S1:** Set up the persistent docs system (CLAUDE.md, ROADMAP, PROGRESS,
@@ -68,3 +88,10 @@ and for cross-game mistake mining comes first._
   Later in the session: recorded the university-admissions objective in CLAUDE.md and
   ROADMAP.md (impact milestones, research/evaluation track, competitor comparison);
   added ENGINEERING_LOG.md and a CI workflow.
+- **2026-11-08 · S2:** Lichess and Chess.com username import (tested against recorded real
+  responses, verified live); IndexedDB library with PGN-derived game identity, dedup,
+  cascading delete, versioned migrations and an analysis cache; library and review views
+  with hash routing; click-to-move variation exploration with live lines on a second
+  worker (`LatestSearch`); reproducible Node + browser benchmarks. Fixed: multi-instance
+  Stockfish loading in Node (found by the benchmark), missing-date placeholder, and
+  Chess.com opening names. Tests went from 37 to 84.

@@ -87,3 +87,52 @@ build on every push.
 the owner's contribution is direction, decisions, evaluation and understanding, and that
 should be visible and defensible. CI enforces the "never claim it works untested" rule
 mechanically rather than relying on discipline.
+
+## D-010 · 2026-11-08 · IndexedDB via the raw API, tested with fake-indexeddb
+**Decision:** Persist games and analyses in one IndexedDB database (`blunderlab`) using
+the browser API directly (~150 lines in `src/storage/`). Add `fake-indexeddb` as a
+**dev-only** dependency so storage is tested in Node.
+**Alternatives:** `idb`/Dexie wrappers (nicer API, but a runtime dependency for code
+we can keep small); localStorage (synchronous, ~5 MB cap, strings only, unsuitable for
+analyses of 10–50 KB each); a server (contradicts D-001 and privacy by default).
+**Migrations:** an append-only array; `DB_VERSION = MIGRATIONS.length`, and each step
+upgrades from v to v+1 so a browser at any old version catches up. Released steps must
+never be edited.
+**Analyses are a cache, not a source of truth:** stored with `format` and an
+`engineKey` (engine build + depth). A format change makes old entries be ignored and
+recomputed rather than migrated.
+**Limits:** quota errors surface as "storage is full, delete some games". Usage is shown
+via `navigator.storage.estimate()`. Persistent storage (`navigator.storage.persist()`)
+is not requested yet, so browsers may evict data under storage pressure. To revisit
+together with export/backup (PROGRESS).
+
+## D-011 · 2026-11-08 · Game identity derived from PGN headers
+See ENGINEERING_LOG "Game identity from the PGN itself": `lichess:<id>`,
+`chesscom:<live|daily>:<id>`, else `pgn:<sha256-prefix>` of normalized content. The
+96-bit hash prefix makes accidental collisions negligible at library scale.
+
+## D-012 · 2026-11-08 · Hash routing, no router library
+**Decision:** `#/` (library) and `#/game/<id>` (review), parsed in `src/ui/route.ts`.
+**Why:** Reloads and bookmarks restore the open game; works on any static host without
+rewrite rules; two routes don't justify a dependency.
+
+## D-013 · 2026-11-08 · Separate engine worker for exploration; latest-wins scheduling
+**Decision:** Full-game analysis and interactive exploration use two Stockfish workers
+(`getEngine("analysis" | "explore")`). Live lines go through `LatestSearch`.
+**Why:** With one worker, live lines would wait behind a 10–60 s game analysis. A second
+worker costs another ~2 MB of WASM plus its hash table. Latest-wins keeps the engine on
+the position actually shown (ENGINEERING_LOG).
+
+## D-014 · 2026-11-08 · Username import runs in the browser against public APIs
+**Decision:** Fetch directly from `lichess.org/api/games/user/{name}` (streamed PGN;
+standard speeds only via `perfType`) and `api.chess.com/pub/player/{name}/games/...`
+(monthly archives walked newest to oldest, serially, at most 24 archives). Both send CORS
+headers (verified with real requests on 2026-11-08).
+**Security/privacy:** usernames are validated against `[A-Za-z0-9_-]{2,30}` and
+URL-encoded; archive URLs returned by Chess.com are only followed if they start with
+`https://api.chess.com/pub/player/`; PGN is parsed as data and rendered as text (React
+escaping), never as HTML.
+**Rate limits:** HTTP 429 gives a "wait a minute" message; requests are serial. There is
+no automatic retry, to avoid hammering the APIs.
+**Not handled:** private Lichess games need OAuth. That's acceptable because the product
+targets the user's own public games.

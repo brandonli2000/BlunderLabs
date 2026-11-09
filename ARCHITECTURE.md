@@ -11,7 +11,7 @@
 | Chess rules | chess.js 1.4 | PGN parsing, SAN/UCI conversion, legality |
 | Engine | Stockfish 19 WASM (`stockfish` npm, lite single-threaded build) | Runs in a Web Worker |
 | Styling | Plain CSS with custom properties | `src/styles/global.css` |
-| Storage | none yet | IndexedDB planned (Phase 1) |
+| Storage | IndexedDB (raw API) | `src/storage/`; tested with fake-indexeddb (dev only) |
 | Backend | none | Planned only for Phase 6 (accounts/sync) |
 
 ## Directory layout
@@ -30,14 +30,31 @@ src/
     workerTransport.ts  Browser: Stockfish in a Web Worker
     nodeTransport.ts    Tests: same WASM build inside Node
   analysis/    Orchestration over engine + core
-    gameAnalysis.ts  analyzeGame → GameAnalysis { positions[], moves[] verdicts, accuracy }
+    gameAnalysis.ts  analyzeGame → GameAnalysis { positions[], moves[], accuracy, durationMs };
+                     analysisEngineKey(limits) for caching
+  import/      Public-API clients (fetch injected for tests)
+    errors.ts      ImportError kinds, username validation, fetchOrThrow
+    lichess.ts     streamed PGN export → string[]
+    chesscom.ts    monthly archives, newest first → string[]
+    fixtures/      real recorded API responses, used by tests and benchmarks
+  library/     Domain model of the user's collection
+    gameRecord.ts  GameRecord, gameIdentity (dedup key), toGameRecord
+    importGames.ts importPgns: parse → identify → store; per-game failures tolerated
+  storage/     IndexedDB
+    db.ts          openDatabase, append-only MIGRATIONS, StorageError
+    library.ts     addGames (dedup), listGames, getGame, deleteGame (cascades),
+                   saveAnalysis/getAnalysis (format-versioned cache), analyzedGameIds
   ui/          React components (render + interaction only)
-    App, ReviewPage, Board (SVG), MoveList, EvalGraph, ImportPanel, annotations, engineInstance
+    App (hash routes), LibraryPage, ImportPanel, GameList, ReviewPage, ReviewParts,
+    Board (SVG, click-to-move), MoveList, EvalGraph; hooks useLibrary,
+    useGameAnalysis, useLiveLines; engineInstance (one worker per role), database
+bench/         Shared workload + Node runner (npm run bench) + browser page (/bench.html)
   styles/      global.css (design tokens + components)
   test/        shared fixtures
 ```
 
-Dependency direction: `ui → analysis → engine → core`, and `ui → core`. `core` imports
+Dependency direction: `ui → {library, storage, analysis, import} → engine → core`.
+`storage` imports only types from `library`/`analysis`. `core` imports
 nothing from other app folders. `analysis` depends on the engine through the
 `PositionSearcher` interface, so tests can use a fake.
 
@@ -63,13 +80,20 @@ in dev and emits them into `dist/engine/` at build time. The worker script finds
 by swapping `.js` → `.wasm` on its own URL, so the two names must stay paired. The
 single-threaded build needs no COOP/COEP headers, so any static host works.
 
-## Data flow (review)
+## Data flow
 
 ```
-PGN text ─splitPgn→ game strings ─parseGame→ ParsedGame
-ParsedGame ─analyzeGame(UciEngine(WorkerTransport))→ GameAnalysis
-ReviewPage state { game, ply, orientation, analysis state } → Board / MoveList / EvalGraph
+Import:  username ─fetchLichessGames / fetchChessComGames→ PGN[]   (or PGN text ─splitPgn→ PGN[])
+         PGN[] ─importPgns→ toGameRecord (parse + gameIdentity) → addGames (dedup) → IndexedDB "games"
+Library: listGames + analyzedGameIds → LibraryPage / GameList → #/game/<id>
+Review:  getGame → parseGame → Review
+         getAnalysis(gameId, engineKey) ─hit─→ shown instantly
+                                        └miss→ analyzeGame ("analysis" worker) → saveAnalysis
+Explore: click-to-move → playMove (chess.js) → Variation state → useLiveLines → LatestSearch ("explore" worker)
 ```
+
+`importedFor` (e.g. "lichess:thibault") records whose games these are. Phase 2's
+cross-game mistake mining relies on it to know which side of each game is "the player".
 
 ## Testing strategy
 
@@ -82,9 +106,8 @@ ReviewPage state { game, ply, orientation, analysis state } → Board / MoveList
 
 ## Future (not built)
 
-- **Storage:** IndexedDB repository module (`src/storage/`) holding games, analyses keyed
-  by `(fen, engine version, depth)`, and player profiles.
-- **Import clients:** `src/import/lichess.ts` (NDJSON export API), `src/import/chesscom.ts`
-  (monthly archives API). Both are CORS-enabled and called from the browser.
+- **Player profiles / mistake catalogue:** new object stores (added via a migration)
+  derived from stored analyses + `importedFor`.
+- **Per-move clocks** from `[%clk]` comments (both sites provide them) for time-pressure diagnosis.
 - **Diagnosis:** `src/diagnosis/` with motif detectors and cause classifier, pure and tested.
 - **Backend (Phase 6):** only when accounts/sync are needed. Candidates are evaluated then.

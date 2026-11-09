@@ -74,9 +74,11 @@ Goal: a reliable, pleasant single-game review tool that everything else builds o
 - ✅ Stockfish 19 in the browser (WASM worker) with a tested UCI wrapper
 - ✅ Move classification by expected-score loss; per-move and game accuracy
 - ✅ Review UI: board, move list, navigation, eval graph, best-move arrow, verdicts
-- ⬜ Import from Lichess and Chess.com by username (public APIs, browser-side)
-- ⬜ Local game library (IndexedDB): persist games and analyses, list/filter/delete
-- ⬜ Interactive board: drag/click moves to explore variations with live engine lines
+- ✅ Import from Lichess and Chess.com by username (public APIs, browser-side)
+- ✅ Local game library (IndexedDB): persist games and analyses, list/filter/delete
+- 🟡 Interactive board: click-to-move variation exploration with live engine lines
+  (no drag-and-drop or keyboard move entry yet)
+- ✅ Reproducible benchmarks (Node + browser harness, `bench/`)
 - ⬜ Original piece set (replacing interim Unicode glyphs)
 - ⬜ Analysis quality: MultiPV for "only move" detection, configurable depth, cache by FEN
 - 🟡 Continuous integration (workflow file written; activates once pushed to GitHub)

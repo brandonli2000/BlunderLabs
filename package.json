@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "tsc --noEmit && vitest run"
+    "check": "tsc --noEmit && vitest run",
+    "bench": "vitest run --config bench/vitest.config.ts"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

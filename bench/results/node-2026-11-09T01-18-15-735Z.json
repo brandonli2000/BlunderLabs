@@ -1,0 +1,86 @@
+{
+  "environment": {
+    "runtime": "node v24.16.0",
+    "platform": "win32 10.0.26200 x64",
+    "cpu": "Intel(R) Core(TM) Ultra 7 155H",
+    "logicalCores": 22,
+    "totalMemGB": 31.4,
+    "rssBeforeMB": 62.8,
+    "rssAfterMB": 198.1,
+    "date": "2026-11-09T01:18:15.735Z"
+  },
+  "report": {
+    "engine": "stockfish-19-lite-single",
+    "depth": 14,
+    "init": {
+      "runsMs": [
+        89.2911,
+        55.10310000000001,
+        52.11130000000003,
+        53.43690000000004,
+        56.31389999999999
+      ],
+      "medianMs": 55.10310000000001
+    },
+    "analysis": [
+      {
+        "label": "lichess-1",
+        "plies": 46,
+        "positions": 47,
+        "ms": 3468.0117,
+        "positionsPerSec": 13.552434093575867,
+        "storedBytes": 20300
+      },
+      {
+        "label": "lichess-2",
+        "plies": 23,
+        "positions": 24,
+        "ms": 1416.6022000000003,
+        "positionsPerSec": 16.94194742885476,
+        "storedBytes": 10210
+      },
+      {
+        "label": "lichess-3",
+        "plies": 46,
+        "positions": 47,
+        "ms": 3901.6799,
+        "positionsPerSec": 12.0460932738229,
+        "storedBytes": 19380
+      },
+      {
+        "label": "chesscom-1",
+        "plies": 128,
+        "positions": 129,
+        "ms": 6708.6669999999995,
+        "positionsPerSec": 19.228857237958003,
+        "storedBytes": 53367
+      },
+      {
+        "label": "chesscom-2",
+        "plies": 95,
+        "positions": 96,
+        "ms": 4015.3379000000004,
+        "positionsPerSec": 23.908324128836078,
+        "storedBytes": 40200
+      },
+      {
+        "label": "chesscom-3",
+        "plies": 88,
+        "positions": 89,
+        "ms": 4756.5569,
+        "positionsPerSec": 18.71101342233497,
+        "storedBytes": 37062
+      }
+    ],
+    "analysisTotal": {
+      "positions": 432,
+      "ms": 24266.8556,
+      "positionsPerSec": 17.802059200451172
+    },
+    "parse": {
+      "games": 600,
+      "ms": 2627.0318000000007,
+      "usPerGame": 4378.386333333335
+    }
+  }
+}
