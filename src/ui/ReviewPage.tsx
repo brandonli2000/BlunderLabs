@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { computeGameClock, formatClock, parseTimeControl, type GameClock } from "../core/clock";
 import { formatScore } from "../core/evaluation";
-import { isPromotion, legalDestinations, pieceColorAt, playMove, type PromotionPiece } from "../core/moves";
+import { isPromotion, legalDestinations, pieceColorAt, playMove, playSan, type PlayedMove, type PromotionPiece } from "../core/moves";
 import { parseGame, type ParsedGame } from "../core/pgn";
 import { sideToMove, type Color } from "../core/types";
 import type { GameRecord } from "../library/gameRecord";
@@ -121,7 +121,11 @@ function Review({
   const makeMove = (from: string, to: string, piece?: PromotionPiece) => {
     clearInteraction();
     const played = playMove(fen, from, to, piece);
-    if (!played) return;
+    if (played) applyMove(played);
+  };
+
+  /** Advance along the game if the move matches it, otherwise extend or start a variation. */
+  const applyMove = (played: PlayedMove) => {
     if (!exploring) {
       if (game.moves[ply]?.uci === played.uci) return seek(ply + 1); // the game move: just advance
       setVariation({ branchPly: ply, moves: [played], cursor: 1 });
@@ -223,7 +227,13 @@ function Review({
             Flip
           </button>
         </nav>
-        <p className="hint board-hint">Click a piece, then a square, to explore your own moves.</p>
+        <MoveInput
+          fen={fen}
+          onMove={(played) => {
+            clearInteraction();
+            applyMove(played);
+          }}
+        />
       </div>
 
       <aside className="review-side">
@@ -327,4 +337,49 @@ function clockAt(clock: GameClock | null, game: ParsedGame, color: Color, ply: n
 function defaultOrientation(record: GameRecord): Color {
   const username = record.importedFor?.split(":")[1];
   return username && record.black.toLowerCase() === username ? "b" : "w";
+}
+
+/** Keyboard alternative to clicking the board: type a move in standard notation. */
+function MoveInput({ fen, onMove }: { fen: string; onMove: (move: PlayedMove) => void }) {
+  const [text, setText] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="move-input"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const played = playSan(fen, text);
+        if (!played) {
+          setError(`“${text.trim()}” isn't a legal move here.`);
+          return;
+        }
+        setText("");
+        setError(null);
+        onMove(played);
+      }}
+    >
+      <label className="hint" htmlFor="move-input">
+        Click a piece, then a square, or type a move:
+      </label>
+      <input
+        id="move-input"
+        className="text-input"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError(null);
+        }}
+        placeholder="e.g. Nf3"
+        autoComplete="off"
+        spellCheck={false}
+        aria-invalid={error !== null}
+        aria-describedby={error ? "move-input-error" : undefined}
+      />
+      {error && (
+        <span id="move-input-error" className="import-error" role="alert">
+          {error}
+        </span>
+      )}
+    </form>
+  );
 }

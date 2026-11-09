@@ -65,7 +65,7 @@ export function PositionReadout({ scoreText, depth, verdict }: { scoreText: stri
           {isFlagged(verdict.classification) && (
             <>
               {" · "}
-              {pct(verdict.winBefore)} → {pct(verdict.winAfter)} expected
+              expected score {pct(verdict.winBefore)} → {pct(verdict.winAfter)}
               {verdict.bestMoveSan && (
                 <>
                   {" · "}better was <strong>{verdict.bestMoveSan}</strong>

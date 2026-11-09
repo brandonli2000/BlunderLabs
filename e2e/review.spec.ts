@@ -61,3 +61,21 @@ test("shows a helpful page for a game that isn't in the library", async ({ page 
   await page.getByRole("link", { name: "Back to library" }).click();
   await expect(page).toHaveURL(/#\/$/);
 });
+
+test("plays moves typed on the keyboard, and explains illegal ones", async ({ page }) => {
+  await importPgn(page, PROMOTION_GAME);
+  const input = page.getByLabel(/type a move/);
+
+  await input.fill("Qh5");
+  await input.press("Enter");
+  await expect(page.getByRole("alert")).toContainText("isn't a legal move here");
+
+  await input.fill("Kd2"); // the game move: advances the main line
+  await input.press("Enter");
+  await expect(page.locator(".ply-readout")).toHaveText("1/2");
+
+  await input.fill("Kg6"); // not the game move (1...Kf6): starts a variation
+  await input.press("Enter");
+  await expect(page.getByRole("region", { name: "Explored variation" })).toContainText("1…Kg6");
+  await expect(input).toBeFocused(); // keyboard users stay in the input
+});

@@ -1415,3 +1415,35 @@ kbd {
 .data-persistence {
   margin-top: 10px;
 }
+
+/* ---------- Usability fixes (session 4) ---------- */
+
+@media (max-width: 860px) {
+  /* Returning users come for their games: show the library before the import tools. */
+  .library-has-games .library-games {
+    order: -1;
+  }
+}
+
+.move-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 6px;
+}
+
+.move-input .hint {
+  margin: 0;
+}
+
+.move-input .text-input {
+  width: 110px;
+  min-height: 30px;
+  font-family: var(--font-data);
+}
+
+.move-input .import-error {
+  margin: 0;
+  flex-basis: 100%;
+}

@@ -25,7 +25,7 @@ export function LibraryPage({ library, onOpen }: LibraryPageProps) {
   }, [games]);
 
   return (
-    <div className="library">
+    <div className={`library${games && games.length > 0 ? " library-has-games" : ""}`}>
       <div className="library-import">
         <ImportPanel
           onImported={(openId) => {

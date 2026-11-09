@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isPromotion, legalDestinations, pieceColorAt, playMove, pvToSan } from "./moves";
+import { isPromotion, legalDestinations, pieceColorAt, playMove, playSan, pvToSan } from "./moves";
 
 const START = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const PROMO = "8/4P1k1/8/8/8/8/8/4K3 w - - 0 1";
@@ -61,5 +61,22 @@ describe("pieceColorAt", () => {
     expect(pieceColorAt(START, "e1")).toBe("w");
     expect(pieceColorAt(START, "e8")).toBe("b");
     expect(pieceColorAt(START, "e4")).toBeNull();
+  });
+});
+
+describe("playSan", () => {
+  it("plays typed moves, tolerating missing check marks, glyphs and zeros for castling", () => {
+    expect(playSan(START, "Nf3")?.uci).toBe("g1f3");
+    expect(playSan(START, " e4!? ")?.san).toBe("e4");
+    expect(playSan(PROMO, "e8=N")?.san).toBe("e8=N+");
+    expect(playSan("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", "0-0")?.san).toBe("O-O");
+  });
+
+  it("returns null for illegal, ambiguous or empty input", () => {
+    expect(playSan(START, "Nf6")).toBeNull();
+    expect(playSan(START, "")).toBeNull();
+    expect(playSan(START, "hello")).toBeNull();
+    // Two knights can reach d2: "Nd2" is ambiguous.
+    expect(playSan("4k3/8/8/8/8/8/8/1N2KN2 w - - 0 1", "Nd2")).toBeNull();
   });
 });

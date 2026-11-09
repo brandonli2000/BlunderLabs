@@ -67,3 +67,20 @@ export function pieceColorAt(fen: string, square: string): "w" | "b" | null {
     return null;
   }
 }
+
+/**
+ * Play a move typed in SAN ("Nf3", "exd5", "e8=N", "O-O"), tolerating
+ * missing check marks and annotation glyphs. Returns null if illegal or
+ * ambiguous.
+ */
+export function playSan(fen: string, input: string): PlayedMove | null {
+  const san = input.trim().replace(/[!?]+$/, "").replace(/0/g, "O");
+  if (!san) return null;
+  try {
+    const chess = new Chess(fen);
+    const move = chess.move(san, { strict: false });
+    return { san: move.san, uci: move.lan, fenBefore: move.before, fenAfter: move.after };
+  } catch {
+    return null;
+  }
+}
