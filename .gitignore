@@ -9,3 +9,7 @@ coverage/
 !.env.example
 test-results/
 playwright-report/
+
+# Experimental benchmark outputs: add deliberately with git add -f when results are final
+bench/results/reference-*.json
+bench/results/strategy-*.json
