@@ -77,3 +77,13 @@ original SVG piece set is planned (PROGRESS.md).
 instead of mocking UCI output.
 **Why:** UCI edge cases (terminal positions, bounds, MultiPV ordering, POV) are exactly
 where mocks lie. The lite build makes the full suite run in under a second.
+
+## D-009 · 2026-11-08 · Transparent AI authorship and CI from the start
+**Decision:** Commits containing AI-written code carry a `Co-Authored-By: Claude`
+trailer (from this point on; the first five commits predate the rule), and the README
+states how the project is built. A GitHub Actions workflow runs typecheck, tests and
+build on every push.
+**Why:** This is a portfolio project, so its credibility depends on accurate authorship;
+the owner's contribution is direction, decisions, evaluation and understanding, and that
+should be visible and defensible. CI enforces the "never claim it works untested" rule
+mechanically rather than relying on discipline.

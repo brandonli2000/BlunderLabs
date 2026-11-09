@@ -1,5 +1,18 @@
 # BlunderLab roadmap
 
+## Guiding objective
+
+BlunderLab is a long-term portfolio project for university admissions (University of
+Waterloo CS/SE in particular), built by a high-school student over months or years with
+extensive AI assistance under the owner's direction. Its aim is to show, with real
+evidence, the ability to **identify a meaningful problem, design an original solution,
+build reliable software, make hard engineering decisions, and help real people**.
+Nothing here assumes or guarantees an admissions outcome.
+
+Task selection criteria, in order of weight: technical depth · originality · real-world
+usefulness · measurable impact · engineering quality · maintainability · genuine learning
+and leadership. Screenshot appeal is not a criterion.
+
 ## Vision
 
 Most analysis tools tell a player *that* a move was bad and *what* was better.
@@ -19,6 +32,38 @@ The core loop:
 Principles: accurate before impressive; explanations must be correct or absent; the
 user's data stays theirs; every "insight" must be traceable to evidence.
 
+### How BlunderLab differs from existing tools
+| Tool | What it does | What BlunderLab adds |
+|---|---|---|
+| Lichess / Chess.com review | Per-move grades, best move, accuracy | Cross-game *causes*, hypotheses tested by diagnostic exercises |
+| Aimchess | Skill-area scores and generic training | Cause classification with evidence and confidence; measured training effect per player |
+| DecodeChess | Natural-language explanation of single positions | Longitudinal diagnosis of the *player*, not just the position |
+
+## Impact milestones (real-world track)
+
+These sit alongside the phases. Record each one in PROGRESS.md and ENGINEERING_LOG.md
+only once it has actually happened, with real numbers.
+- **I-1 Public alpha:** deployed at a stable URL, licence chosen, privacy note published.
+- **I-2 First real users:** the owner's tutoring students and a local club use it; a
+  structured feedback channel exists.
+- **I-3 Feedback loop:** at least one feature visibly changed because of user feedback (documented).
+- **I-4 Measured outcome:** a pre-registered small study (e.g. targeted vs. generic
+  training on diagnosed weaknesses) with honest results, including null results.
+- **I-5 Community:** support for club or coach use (shared study plans, beginner mode).
+
+## Research and evaluation track
+
+The original-algorithm work needs evaluation methods, not just implementations:
+- **Labelled mistake dataset:** a small hand-labelled set of real mistakes with causes,
+  labelled by the owner and stored with a versioned taxonomy. It is used to measure
+  classifier precision/recall.
+- **Classifier benchmarks:** rule-based baseline first; every change is compared on the
+  same dataset and the results recorded in ENGINEERING_LOG.md.
+- **Training-effect measurement:** per-skill ratings with uncertainty. Improvement claims
+  require before/after comparisons on held-out positions or later games.
+- **Performance budgets:** analysis throughput (positions/sec), time-to-interactive, and
+  memory, measured with a repeatable script.
+
 ## Phases
 
 Status legend: ✅ done · 🟡 in progress · ⬜ planned
@@ -34,7 +79,9 @@ Goal: a reliable, pleasant single-game review tool that everything else builds o
 - ⬜ Interactive board: drag/click moves to explore variations with live engine lines
 - ⬜ Original piece set (replacing interim Unicode glyphs)
 - ⬜ Analysis quality: MultiPV for "only move" detection, configurable depth, cache by FEN
-- ⬜ Deployment pipeline (static hosting) + licence decision (see DECISIONS D-004)
+- 🟡 Continuous integration (workflow file written; activates once pushed to GitHub)
+- ⬜ Deployment pipeline (static hosting) + licence decision (see DECISIONS D-004) → milestone I-1
+- ⬜ Basic privacy-respecting usage telemetry *only if* opt-in and documented (needed for I-4)
 
 ### Phase 2: Player profile and mistake mining
 Goal: move from single games to patterns across many games.

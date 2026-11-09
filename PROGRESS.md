@@ -35,8 +35,13 @@ manually verified in Chrome (dark theme).
 - No automated UI tests yet (component/E2E). UI regressions are caught only manually.
 - Licence undecided (DECISIONS D-004): **blocks public deployment**.
 - Analysis is not persisted; reloading the page loses it.
+- CI workflow is written but has never run (no GitHub remote yet).
 
 ## Next session: concrete tasks (in priority order)
+_Ordered by the admissions-focused criteria in ROADMAP.md: the foundation for real users
+and for cross-game mistake mining comes first._
+0. **Owner decisions:** licence (DECISIONS D-004) and whether/when to create the GitHub
+   repo (CI is already written in `.github/workflows/ci.yml`). Both block milestone I-1.
 1. **Lichess import by username**: `src/import/lichess.ts`. Use
    `GET https://lichess.org/api/games/user/{name}?max=N&pgnInJson=false&clocks=true`
    (`Accept: application/x-chess-pgn`), stream the response, reuse `splitPgn`/`parseGame`.
@@ -49,7 +54,10 @@ manually verified in Chrome (dark theme).
 5. Parse `[%clk]` comments into per-move clock times (needed for the time-pressure
    diagnosis later). chess.js `getComments()` exposes them.
 6. Interactive board (click-to-move, variation exploration with live engine lines).
-7. Original SVG piece set; then component tests (Testing Library) for MoveList/Board.
+7. Benchmark script for analysis throughput (positions/sec at depth 14); record the
+   result in ENGINEERING_LOG.md.
+8. Deploy a public alpha (static host) once the licence is decided → milestone I-1.
+9. Original SVG piece set; then component tests (Testing Library) for MoveList/Board.
 
 ## Session log
 - **2026-11-08 · S1:** Set up the persistent docs system (CLAUDE.md, ROADMAP, PROGRESS,
@@ -57,3 +65,6 @@ manually verified in Chrome (dark theme).
   core, the Stockfish engine wrapper and game analysis with tests; built the first review UI.
   Fixed two bugs found by tests (float error at the classification threshold; `-0` from
   POV negation) and a dark-mode eval-graph colour inversion found in the browser.
+  Later in the session: recorded the university-admissions objective in CLAUDE.md and
+  ROADMAP.md (impact milestones, research/evaluation track, competitor comparison);
+  added ENGINEERING_LOG.md and a CI workflow.

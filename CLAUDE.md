@@ -5,6 +5,27 @@ BlunderLab is a chess improvement platform for public users. Its differentiator 
 hypotheses, train them, and measure whether the training worked. It is a long-term
 product, not a prototype.
 
+## Guiding objective
+
+BlunderLab is the owner's (a high-school student's) primary software-engineering
+portfolio project for university admissions (especially Waterloo CS/SE). That means:
+- **Choose tasks by:** technical depth, originality, real-world usefulness, measurable
+  impact, engineering quality, maintainability, and genuine learning, *not* by how
+  impressive a screenshot looks. Never add complexity, frameworks, services or AI
+  models just to look impressive. Every feature must serve a real purpose.
+- **Differentiate.** Do not rebuild Chess.com/Lichess/Aimchess/DecodeChess features for
+  their own sake. Prefer original algorithms and experimentally testable ideas. The
+  flagship is evidence-based diagnostic training (ROADMAP Phase 3–5).
+- **Aim for real users.** Prioritize reaching a public deployment, then real players
+  (the owner's tutoring students, clubs, beginners), feedback, and measured outcomes.
+- **Honesty is non-negotiable.** Never fabricate users, statistics, results or
+  achievements. Never misrepresent authorship: AI writes and reviews a lot of the code,
+  while the owner directs, decides and must understand it. Never imply admission is
+  guaranteed.
+- **Teach the owner.** For each significant decision or algorithm, explain the reasoning
+  plainly so the owner can discuss and defend it. Record it in `DECISIONS.md` and, when
+  it involved a real challenge, bug or measurement, in `ENGINEERING_LOG.md`.
+
 ## Session protocol (mandatory)
 
 **Start of session**
@@ -17,10 +38,15 @@ product, not a prototype.
 1. Verify: `npm run check` and `npm run build` pass; exercise UI changes in a real browser.
 2. Update `PROGRESS.md` (done / partial / planned, bugs, next tasks with enough detail
    that a fresh session can start cold).
-3. Add a `DECISIONS.md` entry for any significant choice; update `ARCHITECTURE.md` only
-   when structure or interfaces changed. Edit incrementally, never rewrite wholesale.
-4. Commit in meaningful units. **Never push, force-push, rewrite history, or publish
-   without explicit user approval.**
+3. Add a `DECISIONS.md` entry for any significant choice; add `ENGINEERING_LOG.md`
+   entries for hard bugs, challenges, performance numbers (measured, with method) and
+   lessons. Update `ARCHITECTURE.md` only when structure or interfaces changed. Edit
+   incrementally, never rewrite wholesale.
+4. Give the owner a short "worth understanding" note: the key concept or tradeoff from
+   the session, in plain language.
+5. Commit in meaningful units. Commits with AI-written code carry a
+   `Co-Authored-By: Claude <noreply@anthropic.com>` trailer. **Never push, force-push,
+   rewrite history, or publish without explicit user approval.**
 
 ## Commands
 

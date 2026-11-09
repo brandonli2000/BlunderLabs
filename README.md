@@ -17,6 +17,14 @@ npm run build
 Analysis runs locally in your browser with Stockfish 19 (WASM). No game data leaves your
 machine.
 
+## How it's built
+
+BlunderLab is designed and directed by its author, a high-school student. AI tools
+(Claude) write and review much of the code under that direction, and commits containing
+AI-written code are marked with a `Co-Authored-By` trailer. Design decisions and their
+reasoning are in [DECISIONS.md](DECISIONS.md); real challenges, bugs and measurements
+are in [ENGINEERING_LOG.md](ENGINEERING_LOG.md).
+
 Docs: [ARCHITECTURE.md](ARCHITECTURE.md) · [DECISIONS.md](DECISIONS.md) · contributor/AI
 instructions in [CLAUDE.md](CLAUDE.md).
 

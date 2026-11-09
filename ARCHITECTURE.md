@@ -76,6 +76,7 @@ ReviewPage state { game, ply, orientation, analysis state } → Board / MoveList
 - Unit tests for every pure module (`core`, `engine/uci`).
 - Integration tests run the **real** Stockfish WASM under Node (`createNodeTransport`):
   mate detection, POV normalization, terminal positions, MultiPV, queueing, full game analysis.
+- CI (`.github/workflows/ci.yml`): typecheck, tests and build on every push/PR to main.
 - UI is currently verified manually in a browser. Component and E2E tests (Playwright)
   are planned once the UI stabilizes.
 
