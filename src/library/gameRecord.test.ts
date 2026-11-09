@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseGame, splitPgn } from "../core/pgn";
 import { fixture } from "../test/fakeFetch";
 import { SCHOLARS_MATE } from "../test/fixtures";
-import { gameIdentity, toGameRecord } from "./gameRecord";
+import { gameIdentity, openingFromEcoUrl, toGameRecord } from "./gameRecord";
 
 const lichessGames = splitPgn(fixture("lichess-thibault-3.pgn"));
 const chesscomGames = (JSON.parse(fixture("chesscom-month.json")) as { games: { pgn: string }[] }).games.map((g) => g.pgn);
@@ -57,5 +57,25 @@ describe("toGameRecord", () => {
   it("tolerates missing headers", async () => {
     const record = await toGameRecord("1. e4 e5 *", null, 0);
     expect(record).toMatchObject({ white: "?", black: "?", whiteElo: null, date: null, timeControl: null, plies: 2 });
+  });
+});
+
+describe("openingFromEcoUrl", () => {
+  it("extracts readable names from Chess.com opening URLs", () => {
+    expect(
+      openingFromEcoUrl(
+        "https://www.chess.com/openings/Queens-Gambit-Declined-Exchange-Positional-Line-Reshevsky-Variation...9.Bd3-Bxd3-10.Qxd3-O-O-11.O-O",
+      ),
+    ).toBe("Queens Gambit Declined Exchange Positional Line Reshevsky Variation");
+    expect(openingFromEcoUrl("https://www.chess.com/openings/Sicilian-Defense-Closed-2...Nc6")).toBe("Sicilian Defense Closed");
+    expect(openingFromEcoUrl("https://www.chess.com/openings/Kings-Pawn-Opening-1...e5-2.Nf3")).toBe("Kings Pawn Opening");
+    expect(openingFromEcoUrl("https://www.chess.com/openings/Caro-Kann-Defense")).toBe("Caro Kann Defense");
+    expect(openingFromEcoUrl(undefined)).toBeNull();
+    expect(openingFromEcoUrl("https://example.com/x")).toBeNull();
+  });
+
+  it("is used for Chess.com game records", async () => {
+    const record = await toGameRecord(chesscomGames[2]!, null, 0);
+    expect(record.opening).toMatch(/^Queens Gambit Declined/);
   });
 });

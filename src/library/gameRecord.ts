@@ -68,11 +68,29 @@ export async function toGameRecord(pgn: string, importedFor: string | null, now:
     result: h.Result ?? "*",
     date: toDate(h.UTCDate ?? h.Date),
     timeControl: h.TimeControl && h.TimeControl !== "-" ? h.TimeControl : null,
-    opening: h.Opening ?? h.ECO ?? null,
+    opening: h.Opening ?? openingFromEcoUrl(h.ECOUrl) ?? h.ECO ?? null,
     plies: game.moves.length,
     importedAt: now,
     importedFor,
   };
+}
+
+/**
+ * Chess.com PGNs carry the opening name only in a URL slug, e.g.
+ * ".../openings/Queens-Gambit-Declined-Exchange-Variation...9.Bd3-Bxd3" or
+ * ".../openings/Sicilian-Defense-Closed-2...Nc6". Keep the name, drop the moves.
+ */
+export function openingFromEcoUrl(url: string | undefined): string | null {
+  const slug = url?.match(/\/openings\/([^?#]+)/)?.[1];
+  if (!slug) return null;
+  let name: string;
+  try {
+    name = decodeURIComponent(slug);
+  } catch {
+    return null;
+  }
+  name = name.split(/\.\.\.|-\d+\./)[0]!.replace(/-\d+$/, "").replace(/-/g, " ").trim();
+  return name || null;
 }
 
 /** chess.js fills a missing Date tag with "????.??.??"; treat any date without digits as absent. */
