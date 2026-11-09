@@ -167,6 +167,7 @@ export function ImportPanel({ onImported }: ImportPanelProps) {
         <div className="import-form import-form-pgn">
           <textarea
             className="pgn-input"
+            aria-label="PGN text"
             value={pgnText}
             onChange={(e) => setPgnText(e.target.value)}
             placeholder={'Paste one or more games in PGN\n\n[Event "…"]\n1. e4 e5 2. Nf3 …'}

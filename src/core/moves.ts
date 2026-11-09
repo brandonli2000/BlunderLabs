@@ -9,10 +9,13 @@ export interface PlayedMove {
 
 export type PromotionPiece = "q" | "r" | "b" | "n";
 
-/** Squares the piece on `from` can legally move to (empty if none or not side to move). */
+/**
+ * Distinct squares the piece on `from` can legally move to (empty if none or
+ * not side to move). A promoting pawn has four moves to one square, listed once.
+ */
 export function legalDestinations(fen: string, from: string): string[] {
   try {
-    return new Chess(fen).moves({ square: from as Square, verbose: true }).map((m) => m.to);
+    return [...new Set(new Chess(fen).moves({ square: from as Square, verbose: true }).map((m) => m.to))];
   } catch {
     return [];
   }

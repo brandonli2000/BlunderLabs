@@ -35,6 +35,7 @@ describe("playMove", () => {
 
   it("handles promotion choice, including underpromotion", () => {
     expect(isPromotion(PROMO, "e7", "e8")).toBe(true);
+    expect(legalDestinations(PROMO, "e7")).toEqual(["e8"]); // four promotion moves, one square (regression)
     expect(isPromotion(START, "e2", "e4")).toBe(false);
     expect(playMove(PROMO, "e7", "e8", "n")?.san).toBe("e8=N+"); // knight on e8 checks g7
     expect(playMove(PROMO, "e7", "e8", "q")?.uci).toBe("e7e8q");

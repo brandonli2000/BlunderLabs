@@ -141,7 +141,9 @@ input {
 }
 
 .review-board {
-  max-width: min(640px, 100%);
+  /* Fit the board, both player strips and the controls on a laptop screen without scrolling. */
+  max-width: min(640px, 100%, calc(100vh - 210px));
+  min-width: min(320px, 100%);
   width: 100%;
   justify-self: center;
 }
