@@ -10,6 +10,8 @@ export interface EngineTransport {
   send(command: string): void;
   /** Register the single output handler; called once per output line. */
   onLine(handler: (line: string) => void): void;
+  /** Register a handler for fatal transport failures (e.g. the worker crashed). */
+  onError?(handler: (message: string) => void): void;
   terminate(): void;
 }
 
@@ -53,18 +55,24 @@ interface PendingSearch {
  */
 export class UciEngine {
   private readonly transport: EngineTransport;
-  private readonly waiters: { token: string; resolve: () => void }[] = [];
+  private readonly waiters: { token: string; resolve: () => void; reject: (error: Error) => void }[] = [];
   private current: PendingSearch | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private multiPv = 1;
   private ready: Promise<void> | null = null;
-  private terminated = false;
+  private dead = false;
   /** Time from first `init()` to `readyok`, in ms; null until ready. */
   initMs: number | null = null;
 
   constructor(transport: EngineTransport) {
     this.transport = transport;
     transport.onLine((line) => this.handleLine(line));
+    transport.onError?.((message) => this.fail(new EngineError(`Engine crashed: ${message}`)));
+  }
+
+  /** True once terminated or crashed; a dead engine rejects every request. */
+  get isDead(): boolean {
+    return this.dead;
   }
 
   /** Handshake; safe to call repeatedly. */
@@ -81,7 +89,7 @@ export class UciEngine {
   /** Search one position. Rejects if the engine is terminated first. */
   search(fen: string, limits: SearchLimits = {}, onInfo?: (line: PvLine) => void): Promise<SearchResult> {
     const run = async (): Promise<SearchResult> => {
-      if (this.terminated) throw new EngineError("Engine terminated");
+      if (this.dead) throw new EngineError("Engine terminated");
       await this.init();
       const multiPv = limits.multiPv ?? 1;
       if (multiPv !== this.multiPv) {
@@ -118,15 +126,22 @@ export class UciEngine {
   }
 
   terminate(): void {
-    this.terminated = true;
     this.transport.terminate();
-    this.current?.reject(new EngineError("Engine terminated"));
+    this.fail(new EngineError("Engine terminated"));
+  }
+
+  /** Mark the engine dead and reject everything in flight. */
+  private fail(error: EngineError): void {
+    this.dead = true;
+    this.current?.reject(error);
     this.current = null;
+    for (const waiter of this.waiters.splice(0)) waiter.reject(error);
   }
 
   private sendAndWait(command: string, token: string): Promise<void> {
-    return new Promise((resolve) => {
-      this.waiters.push({ token, resolve });
+    if (this.dead) return Promise.reject(new EngineError("Engine terminated"));
+    return new Promise((resolve, reject) => {
+      this.waiters.push({ token, resolve, reject });
       this.transport.send(command);
     });
   }

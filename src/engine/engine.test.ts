@@ -45,3 +45,43 @@ describe("UciEngine (real Stockfish)", () => {
     expect(single.lines).toHaveLength(1);
   });
 });
+
+describe("UciEngine failure handling", () => {
+  /** A transport that answers the handshake, then lets the test crash it. */
+  function crashable() {
+    let lineHandler: (line: string) => void = () => {};
+    let errorHandler: (message: string) => void = () => {};
+    const transport = {
+      send(command: string) {
+        if (command === "uci") queueMicrotask(() => lineHandler("uciok"));
+        if (command === "isready") queueMicrotask(() => lineHandler("readyok"));
+        // "go" never answers: the search hangs until the crash.
+      },
+      onLine: (h: (line: string) => void) => (lineHandler = h),
+      onError: (h: (message: string) => void) => (errorHandler = h),
+      terminate() {},
+    };
+    return { transport, crash: (msg: string) => errorHandler(msg) };
+  }
+
+  it("rejects the in-flight search and later requests when the worker crashes", async () => {
+    const { transport, crash } = crashable();
+    const engine = new UciEngine(transport);
+    const pending = engine.search("8/8/8/8/8/8/8/K6k w - - 0 1", { depth: 5 });
+    await new Promise((r) => setTimeout(r, 10));
+    crash("RuntimeError: memory access out of bounds");
+
+    await expect(pending).rejects.toThrow(/Engine crashed: RuntimeError/);
+    expect(engine.isDead).toBe(true);
+    await expect(engine.search("8/8/8/8/8/8/8/K6k w - - 0 1")).rejects.toThrow(/terminated/);
+    await expect(engine.newGame()).rejects.toThrow(/terminated/);
+  });
+
+  it("rejects a pending handshake on crash instead of hanging", async () => {
+    let errorHandler: (message: string) => void = () => {};
+    const engine = new UciEngine({ send() {}, onLine() {}, onError: (h) => (errorHandler = h), terminate() {} });
+    const ready = engine.init();
+    errorHandler("failed to load wasm");
+    await expect(ready).rejects.toThrow(/failed to load wasm/);
+  });
+});

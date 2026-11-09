@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "tsc --noEmit && vitest run",
-    "bench": "vitest run --config bench/vitest.config.ts"
+    "bench": "vitest run --config bench/vitest.config.ts bench/node.bench.ts",
+    "bench:strategy": "vitest run --config bench/vitest.config.ts bench/strategy.bench.ts"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

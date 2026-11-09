@@ -13,6 +13,13 @@ export function createWorkerTransport(url: string = ENGINE_URL): EngineTransport
         if (typeof event.data === "string") handler(event.data);
       };
     },
+    onError: (handler) => {
+      worker.onerror = (event) => {
+        event.preventDefault();
+        handler(event.message || "worker error");
+      };
+      worker.onmessageerror = () => handler("unreadable message from worker");
+    },
     terminate: () => worker.terminate(),
   };
 }
