@@ -203,3 +203,28 @@ firing counts: hanging-piece 24, missed-capture 12 (3.6% and 1.8% of items). Cos
 labels yet, so precision and recall are unknown.** Raw: `bench/tactics/build-summary.json`.
 Limitation: games mostly from one ~1750 Lichess player, so a representative evaluation needs
 more players and rating bands.
+
+### 2026-11-08 · Testing · Driving the labeling tool in a browser (session 6)
+`/label.html` had only been typechecked. A Playwright spec (14 tests; a slice of the real
+unlabeled dataset served by route interception; nothing written to the repo) found five real
+bugs, all in a tool whose output becomes evidence: (1) switching split left the engine hint
+visible, a leak in a *blind* tool; (2) a split with no items rendered "Loading..." with no
+selector, so the user could not switch back; (3) letters typed into the focused split select
+also drove the tool; (4) Ctrl/Meta/Alt chords were hijacked (Ctrl+A toggled the before/after
+view); (5) focus stayed trapped in the name field or select, so labeling keys silently stopped
+working. Lesson: three of my first-draft tests *passed against the buggy code* because they
+did not discriminate (the modifier test, an arrow-key test, and a "rapid key presses" test that
+cannot expose a race because CDP delivers keys sequentially). I rewrote them to use synthetic
+events and the keys the bug actually affected, confirmed they failed (6 red) before fixing, and
+deleted the race test rather than keep one that proves nothing.
+
+### 2026-11-08 · Testing · Refactoring the catalogue onto move facts (session 6)
+To keep `extractMistakes` identical, I dumped its output from the *old* code over every real
+fixture game (4 games x 4 identity variants x pseudo-random verdicts, 422 KB), refactored, and
+compared: byte-identical. Then I mutation-checked the new module: seven deliberate breakages
+(ambiguous owner, unclamped loss, divide by zero starting time, opponent keyed to the player,
+dropped colour check, dropped range check, case-sensitive identity) and the suite caught all
+seven. One failure on the first run was my own wrong expectation (a rising clock without a
+known increment is correctly "inconsistent", not an estimate). An informal one-off timing (not
+recorded as a result) suggested PGN parsing dominates the cost, so building facts for all moves
+is cheap; the `include` predicate mainly avoids retaining per-move objects.

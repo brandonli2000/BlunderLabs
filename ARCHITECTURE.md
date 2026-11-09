@@ -21,7 +21,8 @@ src/
   core/        Pure chess domain logic (no DOM, no engine, no storage)
     types.ts       Color, Score (White-POV), helpers
     pgn.ts         splitPgn, parseGame → ParsedGame { headers, startFen, moves[] (with clockMs) }
-    clock.ts       parseTimeControl, parseClockComment, computeGameClock (spent time: measured/estimated/gaps)
+    clock.ts       parseTimeControl, parseClockComment, computeGameClock (spent time: measured/estimated/gaps),
+                   timeClassOf (Lichess speed classes)
     fen.ts         piecesFromFen, squareCoords (for rendering)
     moves.ts       legalDestinations, isPromotion, playMove, playSan, pvToSan
     notation.ts    numberedSans ("12…Nf6 13.Bxf7+")
@@ -49,7 +50,9 @@ src/
   library/     Domain model of the user's collection
     gameRecord.ts  GameRecord, gameIdentity (dedup key), toGameRecord, openingFromEcoUrl
     importGames.ts importPgns: parse → identify → store; per-game failures tolerated
-    mistakes.ts    extractMistakes (+ ownerColor), filterMistakes, sortMistakes
+    moveFacts.ts   extractMoveFacts (one fact per analysed move, both sides; identity, phase, clock,
+                   time class; all-or-nothing validity), ownerColor
+    mistakes.ts    extractMistakes (flagged projection of move facts), filterMistakes, sortMistakes
   tactics/     Tactical pattern detection (pure; not shown in the UI until validated)
     types.ts       MoveContext (positions + engine evidence per move), Detection, options
     context.ts     buildMoveContexts(game, analysis)
@@ -121,7 +124,8 @@ Review:  getGame → parseGame (+ clocks) → Review
 Explore: click or typed SAN → playMove/playSan → Variation → useLiveLines → LatestSearch ("explore" worker)
 Batch:   BatchRunner loop: pending = gameIdsNewestFirst − analyzedGameIds − job.failed
          → analyzeGame ("batch" worker) → saveAnalysis (immediately) → repeat; job status in "jobs"
-Mistakes: latestAnalysesByGame + listGames → extractMistakes per game → filter/sort → #/game/<id>/<ply>
+Mistakes: latestAnalysesByGame + listGames → extractMistakes (= flagged extractMoveFacts) per game → filter/sort → #/game/<id>/<ply>
+Facts:    GameRecord + GameAnalysis → extractMoveFacts → MoveFact[] (profile statistics will consume these; not built yet)
 Tactics: buildMoveContexts → detectPatterns (SEE + engine evidence) → Detection[]   (offline only)
          dataset-v1.json → /label.html (blind) → labels/*.json → evaluateDetectors → reports/
 Backup:  createBackup (one read tx) → JSON download;  file → validateBackup → planRestore (preview)
@@ -129,8 +133,9 @@ Backup:  createBackup (one read tx) → JSON download;  file → validateBackup 
 ```
 
 `importedFor` (e.g. "lichess:thibault") records whose games these are; `ownerColor()`
-uses it to separate the player's moves from opponents'. The planned player profile builds
-on this (design 0001).
+(in `moveFacts.ts`) uses it to separate the player's moves from opponents'; if the name matches
+neither or both sides the owner is unknown. Facts carry `playerKey` only on the account's own
+moves. The planned player profile builds on this (design 0001, D-025).
 
 ## Testing strategy
 

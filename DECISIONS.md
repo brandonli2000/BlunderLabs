@@ -253,3 +253,32 @@ Blind labeling avoids confirmation bias, and the game-level split avoids leakage
 correlated moves of one game.
 **Limitation:** one source player (thibault, ~1700–1850 Lichess blitz) dominates the set; a
 representative evaluation needs games across rating bands and players.
+
+## D-025 · 2026-11-08 · Move facts: all moves, explicit identity, all-or-nothing validity
+**Decision:** `extractMoveFacts(record, analysis, include?)` (`library/moveFacts.ts`) returns one
+immutable fact per analysed move of both sides. The mistake catalogue is a projection of it
+(`extractMistakes` asks for flagged verdicts only, then maps to the existing `MistakeEntry`).
+Rules:
+- **Identity:** a fact carries `playerKey` only on the imported account's own moves;
+  `byOwner` stays true / false / null. If the account's name matches **neither or both**
+  sides, the owner is unknown (null), so an opponent's moves are never credited to the player.
+  Matching is case-insensitive (backup restore does not normalise `importedFor`).
+- **Validity is per game and all or nothing:** the analysis must have the same moves, plies and
+  colours as the game, and every win value must be a number in 0-1; otherwise there are no facts.
+- **No re-classification:** `classification` is the stored verdict; `loss` is clamped at 0.
+- **Clock facts stay facts:** `clockMs` is the clock after the move; `clockFraction` is not
+  clamped (an increment can push it above 1) and is null without a positive starting time;
+  `spentGap` says why a time is missing. Time class uses the Lichess definition.
+**Why:** Rates need denominators, so the profile needs facts about every move, not only the
+flagged ones. One extraction path means the catalogue and the profile cannot disagree.
+Dropping a whole game on corrupted verdicts costs a little data but never skews a rate; a
+partial analysis would silently make late-game moves look better than they are.
+**Alternatives rejected:** making `MistakeEntry` an alias of `MoveFact` (every UI type and test
+fixture would change, and the catalogue would retain extra fields for thousands of entries);
+accepting a prefix analysis (partial coverage is invisible downstream).
+**Behaviour changes made deliberately:** the catalogue now also rejects games whose verdict
+ply, colour or win values are inconsistent (previously only length and SAN were checked), and
+treats a game where both sides match the imported name as owner-unknown (previously White).
+Neither can arise from the importers; both matter for restored or hand-edited backups.
+**Limitation:** `clockMs` is after the move; the time available *when starting to think* is the
+previous own clock. Decide which to bucket on before building clock buckets (see PROGRESS next steps).

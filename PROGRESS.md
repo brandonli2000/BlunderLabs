@@ -1,13 +1,14 @@
 # BlunderLab progress
 
-_Last updated: 2026-11-08 (session 5)_
+_Last updated: 2026-11-08 (session 6)_
 
 **Current phase:** Phase 2 (Player intelligence and mistake mining), working on the
 Tactical Intelligence Engine v1. Phase 1 is functionally complete except deployment, which
 waits on the licence decision. See ROADMAP.md ("Where we are").
-**Health (session 5):** typecheck clean · 178/178 unit/integration tests (26 files) · build OK ·
-14/14 Playwright E2E at the last E2E run (session 4; no UI changes since) · GitHub `main` =
-`2535fe0` (pushed with approval); session-5 commits are local and **not pushed**.
+**Health (session 6):** typecheck clean · 215/215 unit/integration tests (27 files) · build OK ·
+28/28 Playwright E2E (14 app + 14 labeling-tool) · GitHub `main` = `c17800c`: the three
+session-5 commits were **pushed with the owner's approval** at the start of session 6.
+Session-6 commits are local and **not pushed**.
 
 ## Implemented and verified ✅
 - **Core** (unit tests): PGN parsing, clocks (`[%clk]` + TimeControl → remaining/spent with
@@ -50,12 +51,30 @@ waits on the licence decision. See ROADMAP.md ("Where we are").
     271 holdout, **all labels null**), `/label.html` blind labeling tool, guidelines
     (`docs/tactics/labeling-guidelines.md` v1.0), `npm run tactics:evaluate` (precision,
     recall, Wilson CIs, disagreement report). Unvalidated firing: hanging 24, missed 12.
+- **Move facts (design 0001 §4, done for the fields listed):** `extractMoveFacts` (`library/moveFacts.ts`)
+  yields one observation per analysed move, both sides, flagged or not: classification, loss,
+  phase, time class, clock (remaining, spent with provenance and gap reason, fraction of
+  starting time), and explicit identity (`playerKey` only on the imported account's own moves,
+  `byOwner` true/false/null). One all-or-nothing validity gate (analysis must match the game's
+  moves, plies, colours, and carry win values in 0–1). `timeClassOf` in `core/clock.ts`
+  (Lichess definition). Tests: 31 for the facts, 3 for time classes, 3 new catalogue tests;
+  the facts module was mutation-checked (7 deliberate breakages, all caught). Deliberately
+  absent: the `motifs` field (detectors are unvalidated, so nothing would be honest to put there).
+- **Mistake catalogue now derives from move facts** (`extractMistakes` = flagged projection).
+  Output verified byte-identical to the old implementation over every real fixture game
+  (4 games x 4 identity variants) before the old code was removed; the catalogue E2E still passes.
+- **`/label.html` verified in a real browser (Playwright, 14 tests):** dataset loading,
+  keyboard labeling, navigation, persistence, export round trip, error paths, blind-tool
+  guarantees. Five bugs found and fixed (see ENGINEERING_LOG). Labels in those tests live only
+  in the test browser; **no human labels exist yet** and none were generated.
 
 ## In progress 🟡
+- **Per-player improvement profile (design 0001): foundation only.** Move facts exist and are
+  tested; there is no bucketing, rate, confidence interval, `profiles` store or profile UI yet.
 - **Detector validation:** waiting for the owner's labels on the dev split. Precision and
   recall are unknown until then. Do not claim any accuracy.
-- `/label.html` has not yet been exercised in a browser by a person (typechecked only); the
-  first labeling session should confirm it works end to end (load, label, export).
+- `/label.html` is browser-tested by automation but no person has labeled with it yet; the
+  first real labeling session is still the true usability test (feel, pacing, guideline clarity).
 
 ## Partially implemented / known gaps
 - No drag-and-drop on the board (click and typed moves work).
@@ -64,6 +83,11 @@ waits on the licence decision. See ROADMAP.md ("Where we are").
 - Mistake-preview board only appears on hover/focus on wide screens; on phones, tap opens the review.
 - Mistake catalogue and analyses are computed on demand; fine at current scale, unmeasured for 1,000+ games.
 - Browser benchmark numbers (session 2) came from an automation-attached Chrome; re-run cleanly.
+- `MoveFact.clockMs` is the clock *after* the move (as the catalogue always showed). The time a
+  player had when starting to think is the previous own clock; for time-pressure statistics that
+  is the more faithful quantity and should be considered when building clock buckets.
+- Move facts for all moves are not yet used by any UI or store; materializing them is only
+  needed if profiles over 1,000+ games prove slow (unmeasured).
 
 ## Known risks
 - Licence undecided (DECISIONS D-004): **blocks public deployment**.
@@ -71,19 +95,24 @@ waits on the licence decision. See ROADMAP.md ("Where we are").
   so 100 games takes 10–30 minutes. The strategy experiment exists to address this with evidence.
 
 ## Next session: concrete tasks (in priority order)
-0. **Owner:** decide the licence (D-004); approve pushing session-5 commits; start labeling:
+0. **Owner:** decide the licence (D-004); approve pushing session-6 commits; start labeling:
    `npm run dev` → `/label.html` → label dev items (~30 min sessions) → Export → save as
    `bench/tactics/labels/dataset-v1.labeled.json`.
-1. Smoke-test `/label.html` in a browser (load, keyboard labeling, export) and fix anything found.
+1. Profile statistics module `library/profile.ts` (design 0001 §5), pure and tested: bucket move
+   facts by phase x colour x time class x clock bucket (over 50% / 20-50% / under 20% of starting
+   time, plus absolute under 30 s), rate per 100 moves, expected score lost per 100 moves,
+   `wilsonInterval` (already in `core/stats.ts`), the n < 50 "not enough games" rule, the
+   non-overlapping-interval comparison rule. Decide clock-at-decision vs clock-after first.
+   Group facts by `playerKey` (never by display name).
 2. Once ≥ ~100 dev items are labeled: `npm run tactics:evaluate`, read the disagreement report,
    and improve the detectors (bump their versions). Record results in ENGINEERING_LOG.
 3. Broaden the evaluation games (other players and rating bands) before trusting any number.
-4. Per-player profile v0 (design 0001 §4–5): `extractMoveFacts`, time classes, clock buckets,
-   `wilsonInterval` (already in `core/stats.ts`), explicit player keys.
+4. `profiles` store (schema migration v3) and the minimal profile view (design 0001 §3, §8 step 4):
+   one table per dimension, no charts at first; "no data", not zeros, for empty buckets.
 5. Re-time analysis strategies on an idle machine (`npm run bench:strategy`; the reference is cached).
 6. Next detectors on the same framework (forks, pins, overloaded defenders), each with labels.
 
-## Session log
+## Session log (newest last)
 - **2026-11-08 · S1:** Set up the persistent docs system (CLAUDE.md, ROADMAP, PROGRESS,
   ARCHITECTURE, DECISIONS). Scaffolded the app; built the PGN/UCI/evaluation/classification
   core, the Stockfish engine wrapper and game analysis with tests; built the first review UI.
@@ -114,3 +143,9 @@ waits on the licence decision. See ROADMAP.md ("Where we are").
   format, 661-item unlabeled real-game dataset, blind labeling tool, guidelines and evaluation
   harness. Experimental benchmark outputs gitignored. Long-term context consolidated into
   CLAUDE.md / ROADMAP.md. Tests 140 → 178.
+- **2026-11-08 · S6:** Pushed the session-5 commits (owner-approved). Drove `/label.html` in
+  Chromium with a new Playwright spec and fixed five bugs it exposed (engine hint leaking across
+  split switches, dead end on an empty split, keys leaking from a focused select, hijacked
+  Ctrl/Alt chords, focus trapped in the name field). Built `extractMoveFacts` and `timeClassOf`
+  test-first, moved the catalogue onto the facts with a byte-identical differential check, and
+  mutation-checked the new tests. Tests 178 -> 215 unit, 14 -> 28 E2E.

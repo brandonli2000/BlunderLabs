@@ -72,7 +72,7 @@ and the first original algorithm work (legal SEE + two tactical detectors + an e
 dataset) is built but **not yet validated**.
 
 **Next priorities:** (1) owner labels the dev split → measure and improve detectors;
-(2) per-player profile v0 (design 0001); (3) clean re-timing of analysis strategies;
+(2) per-player profile statistics on top of the new move facts (design 0001 §5); (3) clean re-timing of analysis strategies;
 (4) deployment once licensed.
 
 **Unresolved issues:** licence (GPL-3.0 recommended, D-004) blocks deployment · no human
@@ -119,8 +119,10 @@ Goal: move from single games to patterns across many games.
   - ⬜ **Human labels** (owner) → dev-split error analysis → detector v2 → holdout precision
   - ⬜ Show detections in the catalogue only after holdout precision ≥ 90% with a meaningful
     lower confidence bound (D-023)
-- ⬜ Per-player improvement profile: rates with Wilson intervals by phase, colour, time
+- 🟡 Per-player improvement profile: rates with Wilson intervals by phase, colour, time
   class and clock bucket; explicit player identity (design: `docs/design/0001-…`)
+  - ✅ Move facts for every analysed move with explicit identity, phase, time class and clock (D-025)
+  - ⬜ Bucketing, rates and Wilson intervals (`library/profile.ts`), `profiles` store, profile view
 - ⬜ Further detectors on the same framework: forks, pins, overloaded defenders, back-rank
   weaknesses, discovered attacks, missed mate; calculation-depth analysis (how deep the
   refutation was)

@@ -1,6 +1,6 @@
 # Design 0001: Player improvement profile and the first tactical motif detector
 
-Status: **proposal** (not implemented) · Author: BlunderLab maintainers · 2026-11-08
+Status: **in progress**: §6 (SEE, detectors) built in session 5, unvalidated; §4 move facts built in session 6 (D-025); §5 statistics and the §3 profiles store not started · Author: BlunderLab maintainers · 2026-11-08
 
 ## 1. Goal
 
@@ -33,7 +33,7 @@ unrelated players would make every statistic meaningless.
 
 - **Player key**: `source:username` lower-cased (`lichess:thibault`, `chesscom:hikaru`),
   taken from `GameRecord.importedFor`. In each game, the side whose name matches is
-  "the player". This already exists: `ownerColor()` in `library/mistakes.ts`.
+  "the player". This exists as `ownerColor()` in `library/moveFacts.ts`.
 - **Profile** = an explicit, user-made set of player keys ("me" = `lichess:x` +
   `chesscom:y`). Keys are **never merged automatically** by matching names: different
   people share names.
@@ -158,6 +158,11 @@ rendered as one factual sentence: "After 10.h4, the knight on f4 could be won (�
 - No cross-player comparisons or ratings estimates.
 
 ## 8. Implementation order
+
+_Progress: steps 1, 2 (time class), 5 and 6 (detectors, unvalidated) are done. Differences from
+the sketch in §4: facts cover **both** sides (`byOwner`, and `playerKey` only on the account's
+own moves), `ownerColor` lives in `library/moveFacts.ts`, there is no `motifs` field yet, and
+there is an explicit `spentGap`. See D-025._
 
 1. `extractMoveFacts` and a refactor of the catalogue onto it (tests: catalogue unchanged).
 2. Time-class helper plus tests; clock buckets.
