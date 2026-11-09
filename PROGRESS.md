@@ -54,15 +54,16 @@ Lichess and Chess.com APIs.
 - `navigator.storage.persist()` not requested, so the browser may evict the library under
   storage pressure. There's no export/backup yet.
 - Licence undecided (DECISIONS D-004): **blocks public deployment**.
-- CI workflow is written but has never run (no GitHub remote).
+- Repo pushed to https://github.com/brandonli2000/BlunderLabs on 2026-11-08; the first CI run
+  result has not been checked yet (see the Actions tab).
 - Import parsing costs ~4–11 ms/game (chess.js); fine for 100 games, worth profiling for
   bulk imports of thousands.
 - Full analysis takes ~5–20 s per game in the browser at depth 14, too slow for
   batch analysis of many games (Phase 2).
 
 ## Next session: concrete tasks (in priority order)
-0. **Owner decisions** (not blocking local work): licence and GitHub repo. See the session-2
-   summary recommendations.
+0. **Owner decision** (not blocking local work): licence (recommended GPL-3.0, DECISIONS D-004).
+   Check the first CI run on GitHub Actions.
 1. **Per-move clock times:** parse `[%clk h:mm:ss(.s)]` comments (both sites send them;
    chess.js `getComments()` returns them keyed by FEN) into `GameMove.clockMs`, and show
    time spent per move in the move list. This is the first diagnostic signal beyond engine
