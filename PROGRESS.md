@@ -1,12 +1,13 @@
 # BlunderLab progress
 
-_Last updated: 2026-11-08 (session 6)_
+_Last updated: 2026-11-09 (session 7)_
 
 **Current phase:** Phase 2 (Player intelligence and mistake mining), working on the
 Tactical Intelligence Engine v1. Phase 1 is functionally complete except deployment, which
 waits on the licence decision. See ROADMAP.md ("Where we are").
-**Health (session 6):** typecheck clean · 215/215 unit/integration tests (27 files) · build OK ·
-28/28 Playwright E2E (14 app + 14 labeling-tool) · GitHub `main` = `c17800c`: the three
+**Health (session 7):** typecheck clean · 231/231 unit/integration tests (28 files, excluding the
+untracked `src/core/seeOracle.test.ts`, which fails on its own, see Known gaps) · build OK ·
+35/35 Playwright E2E (14 app + 21 labeling-tool) · GitHub `main` = `c17800c`: the three
 session-5 commits were **pushed with the owner's approval** at the start of session 6.
 Session-6 commits are local and **not pushed**.
 
@@ -63,6 +64,17 @@ Session-6 commits are local and **not pushed**.
 - **Mistake catalogue now derives from move facts** (`extractMistakes` = flagged projection).
   Output verified byte-identical to the old implementation over every real fixture game
   (4 games x 4 identity variants) before the old code was removed; the catalogue E2E still passes.
+- **Assisted labeling (session 7, D-026; built and browser-tested, not yet used by a person):**
+  `/label.html` shows the detector's suggestion and supporting engine line for a question only
+  after you answer it, on the dev split only; the holdout never shows one. Suggestions are
+  "yes" or nothing (never "no"), are never written as labels, and your first answer is stored
+  separately (`review` field, optional, dataset version still 1). "unsure / needs review" is the
+  existing excluded-from-scoring label with a `u` key to revisit. A coverage panel shows
+  reviewed/unsure/unlabeled counts and how often you kept or revised after a reveal, labeled as
+  coverage, not accuracy. `npm run tactics:evaluate` reports coverage apart from precision/recall,
+  adds a table on first blind answers when review records exist, and states the 90% target only
+  if the Wilson lower bound reaches it. Reopening a file whose labels differ from saved browser
+  work now reports the conflict. Logic in `src/tactics/assist.ts` (16 tests) plus 7 browser tests.
 - **`/label.html` verified in a real browser (Playwright, 14 tests):** dataset loading,
   keyboard labeling, navigation, persistence, export round trip, error paths, blind-tool
   guarantees. Five bugs found and fixed (see ENGINEERING_LOG). Labels in those tests live only
@@ -77,6 +89,13 @@ Session-6 commits are local and **not pushed**.
   first real labeling session is still the true usability test (feel, pacing, guideline clarity).
 
 ## Partially implemented / known gaps
+- **Uncommitted/failing file not from session 7:** `src/core/seeOracle.test.ts` (untracked, an SEE
+  differential oracle test) fails its `> 500 positions from real games` assertion (gets 95). Not
+  touched. Fix the position source or the threshold before committing it; the test also takes
+  a few seconds.
+- A `latestSearch` engine test timed out once under full-suite load (passes alone); watch for flakiness.
+- Assisted labeling only speeds hard cases and revision: the detector is silent on most items,
+  and recall needs those labeled by hand (dev: 14 hanging firings of 390 items).
 - No drag-and-drop on the board (click and typed moves work).
 - Variations are one level deep and not saved.
 - Pieces are interim Unicode glyphs.
@@ -95,9 +114,11 @@ Session-6 commits are local and **not pushed**.
   so 100 games takes 10–30 minutes. The strategy experiment exists to address this with evidence.
 
 ## Next session: concrete tasks (in priority order)
-0. **Owner:** decide the licence (D-004); approve pushing session-6 commits; start labeling:
-   `npm run dev` → `/label.html` → label dev items (~30 min sessions) → Export → save as
-   `bench/tactics/labels/dataset-v1.labeled.json`.
+0. **Owner:** decide the licence (D-004); approve pushing session-6/7 commits; start labeling:
+   `npm run dev` → `/label.html` → enter your name → answer each question from the board first, then read the
+   reveal and keep or change your answer; mark real doubts "unsure / needs review" and revisit with `u`.
+   ~30 min sessions; Export → save as `bench/tactics/labels/dataset-v1.labeled.json`. Label the holdout
+   only at the end (it shows no suggestions) and do not tune detectors on it.
 1. Profile statistics module `library/profile.ts` (design 0001 §5), pure and tested: bucket move
    facts by phase x colour x time class x clock bucket (over 50% / 20-50% / under 20% of starting
    time, plus absolute under 30 s), rate per 100 moves, expected score lost per 100 moves,
@@ -149,3 +170,8 @@ Session-6 commits are local and **not pushed**.
   Ctrl/Alt chords, focus trapped in the name field). Built `extractMoveFacts` and `timeClassOf`
   test-first, moved the catalogue onto the facts with a byte-identical differential check, and
   mutation-checked the new tests. Tests 178 -> 215 unit, 14 -> 28 E2E.
+- **2026-11-09 · S7:** Assisted labeling (D-026): reveal-after-answer suggestions on the dev split,
+  first-answer record, unsure/needs-review navigation, coverage panel, evaluation that separates
+  coverage from precision/recall and can score blind first answers, conflict reporting on reopen.
+  Holdout untouched; no labels exist, so no accuracy claim. Mutation-checked the two key guards.
+  Tests 215 -> 231 unit, 28 -> 35 E2E.

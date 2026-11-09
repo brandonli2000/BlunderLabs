@@ -1346,6 +1346,10 @@ kbd {
   text-decoration: underline;
 }
 
+.label-data {
+  font-family: var(--font-data);
+}
+
 .mt-mono {
   font-family: var(--font-data);
   white-space: nowrap;

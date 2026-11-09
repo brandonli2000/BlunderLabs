@@ -228,3 +228,18 @@ seven. One failure on the first run was my own wrong expectation (a rising clock
 known increment is correctly "inconsistent", not an estimate). An informal one-off timing (not
 recorded as a result) suggested PGN parsing dominates the cost, so building facts for all moves
 is cheap; the `include` predicate mainly avoids retaining per-move objects.
+
+### 2026-11-09 · Design · Assisted labeling without contaminating the benchmark (session 7)
+Goal: cut labeling effort while keeping dev/holdout trustworthy. The real risk is circularity
+(labels influenced by the detector, then used to score it). Mitigations are structural, not
+procedural: reveal after the answer, record the first answer, never suggest "no", no
+suggestions on the holdout, evaluation reads human labels only, coverage reported apart from
+accuracy. Verification: 16 unit tests (suggestion rules, judge/revise bookkeeping, export,
+conflict reporting, coverage, scoring on final vs initial answers, 90%-status wording) and 7
+new browser tests. I broke two guards on purpose (reveal-before-answer and the holdout check)
+and confirmed the tests failed (2 browser + 1 unit), then restored them. Real firing counts
+from the unlabeled dataset (hanging-piece detector): 14 dev items, 10 holdout items, so the
+saving is real but modest. No human labels exist yet, so no accuracy number was produced.
+Also noticed: an untracked `src/core/seeOracle.test.ts` (not part of this change) fails its own
+`> 500 positions from real games` assertion (got 95), and one `latestSearch` test timed out
+once under full-suite load but passed alone and on the rerun.

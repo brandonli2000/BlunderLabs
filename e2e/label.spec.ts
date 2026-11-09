@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import type { Page } from "@playwright/test";
 import { parseDataset, type TacticsDataset } from "../src/tactics/dataset";
+import { suggestionFor } from "../src/tactics/assist";
+import { DETECTORS, DEFAULT_DETECTOR_OPTIONS } from "../src/tactics";
 import { expect, test } from "./helpers";
 
 /**
@@ -225,4 +227,106 @@ test("the real dataset file loads unmodified, and every shipped label is still n
   expect(REAL.items.every((i) => i.labels["hanging-piece"] === null && i.labels["missed-capture"] === null)).toBe(true);
   await page.goto("/label.html");
   await expect(progress(page)).toHaveText(`1/${devCount} · 0 fully labeled`);
+});
+
+// ---- Assisted labeling: the suggestion appears only after the human answers, never labels anything ----
+
+const firing = (split: "dev" | "holdout", detector: "hanging-piece" | "missed-capture") =>
+  REAL.items.find((i) => i.split === split && suggestionFor(i, detector) !== null) ?? REAL.items.find((i) => i.split === split && DETECTORS[detector](i.context, DEFAULT_DETECTOR_OPTIONS) !== null);
+const silent = REAL.items.find((i) => i.split === "dev" && !DETECTORS["hanging-piece"](i.context, DEFAULT_DETECTOR_OPTIONS) && !DETECTORS["missed-capture"](i.context, DEFAULT_DETECTOR_OPTIONS));
+
+function assisted(): { dataset: TacticsDataset; hang: string; quiet: string; held: string } {
+  const hang = firing("dev", "hanging-piece")!;
+  const held = firing("holdout", "hanging-piece")!;
+  return {
+    dataset: { ...REAL, createdAt: "e2e-assist", items: [hang, silent!, held] },
+    hang: hang.id,
+    quiet: silent!.id,
+    held: held.id,
+  };
+}
+const reveal = (page: Page, detector: string) => page.getByTestId(`reveal-${detector}`);
+
+test("the suggestion stays hidden until the question is answered, then shows the explanation and engine line", async ({ page }) => {
+  await openLabeler(page, assisted().dataset);
+  await expect(reveal(page, "hanging-piece")).toHaveCount(0);
+  await page.keyboard.press("2"); // hanging: no
+  await expect(reveal(page, "hanging-piece")).toContainText("Assistant suggests yes: it differs from your answer");
+  await expect(reveal(page, "hanging-piece")).toContainText("Engine line after the move played:");
+  // The other question was not answered, so nothing is revealed for it.
+  await expect(reveal(page, "missed-capture")).toHaveCount(0);
+});
+
+test("a suggestion never labels: viewing it leaves the item unlabeled in progress and in the export", async ({ page }) => {
+  const { dataset } = assisted();
+  await openLabeler(page, dataset);
+  await page.keyboard.press("3"); // unsure on hanging, which reveals the suggestion
+  await expect(reveal(page, "hanging-piece")).toBeVisible();
+  await expect(progress(page)).toHaveText("1/2 · 0 fully labeled");
+  await expect(pressed(page, "Left hanging", "yes")).not.toHaveClass(/btn-primary/);
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export labels" }).click();
+  const exported = parseDataset(readFileSync((await (await download).path())!, "utf8"));
+  expect(exported.items[0]!.labels).toEqual({ "hanging-piece": "unsure", "missed-capture": null });
+  expect(exported.items[1]!.labels).toEqual({ "hanging-piece": null, "missed-capture": null });
+});
+
+test("revising after the reveal keeps the first answer on record and exports both", async ({ page }) => {
+  const { dataset, hang } = assisted();
+  await openLabeler(page, dataset);
+  await page.keyboard.press("2");
+  await page.keyboard.press("1"); // revise to yes after seeing the suggestion
+  await expect(reveal(page, "hanging-piece")).toContainText("Your first answer was no; the answer is now yes.");
+  await expect(page.locator(".label-coverage")).toContainText("suggestions seen 1, kept 1, revised after reveal 1");
+
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export labels" }).click();
+  const exported = parseDataset(readFileSync((await (await download).path())!, "utf8"));
+  const it = exported.items.find((i) => i.id === hang)!;
+  expect(it.labels["hanging-piece"]).toBe("yes");
+  expect(it.review?.["hanging-piece"]).toMatchObject({ initial: "no", suggestionShown: "yes" });
+  expect(it.review?.["missed-capture"]).toBeUndefined();
+});
+
+test("when the detector is silent the reveal says so without implying the pattern is absent", async ({ page }) => {
+  await openLabeler(page, assisted().dataset);
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("5");
+  await expect(reveal(page, "missed-capture")).toContainText("found nothing here. That is not evidence the pattern is absent.");
+});
+
+test("the holdout never reveals a suggestion, even where the detector fires", async ({ page }) => {
+  await openLabeler(page, assisted().dataset);
+  await page.getByLabel("Split").selectOption("holdout");
+  await page.keyboard.press("2");
+  await expect(panel(page, "Left hanging").getByRole("button", { name: /^no/ })).toHaveClass(/btn-primary/);
+  await expect(reveal(page, "hanging-piece")).toHaveCount(0);
+  await expect(page.getByText("Holdout: suggestions are never shown.")).toBeVisible();
+});
+
+test("unsure items can be revisited with u, and coverage counts them apart from reviewed items", async ({ page }) => {
+  await openLabeler(page, assisted().dataset);
+  await page.keyboard.press("1"); // item 1 hanging: yes
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("6"); // item 2 missed capture: unsure
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("u");
+  await expect(progress(page)).toHaveText("2/2 · 0 fully labeled");
+  const cov = page.locator(".label-coverage");
+  await expect(cov).toContainText("hanging-piece: 1/2 reviewed (50%) · yes 1 · no 0 · unsure 0 · unlabeled 1");
+  await expect(cov).toContainText("missed-capture: 0/2 reviewed (0%) · yes 0 · no 0 · unsure 1 · unlabeled 1");
+  await expect(cov).toContainText("Coverage only");
+});
+
+test("labels in an opened file that differ from saved browser work are reported, not replaced silently", async ({ page }) => {
+  const { dataset } = assisted();
+  await openLabeler(page, dataset);
+  await page.keyboard.press("2"); // saved in this browser: hanging = no
+  const labeled: TacticsDataset = {
+    ...dataset,
+    items: dataset.items.map((it, i) => (i === 0 ? { ...it, labels: { "hanging-piece": "yes", "missed-capture": null } } : it)),
+  };
+  await page.locator("input[type=file]").setInputFiles({ name: "labeled.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(labeled)) });
+  await expect(page.getByText("1 label(s) in the opened file differ from your saved browser work")).toBeVisible();
+  await expect(pressed(page, "Left hanging", "no")).toHaveClass(/btn-primary/);
 });

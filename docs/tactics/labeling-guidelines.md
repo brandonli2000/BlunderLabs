@@ -2,8 +2,13 @@
 
 These guidelines define the two questions labelers answer in `/label.html`. The labels
 are the ground truth for measuring BlunderLab's tactical detectors, so they must describe
-**the chess**, not what the algorithm does. Never look at detector output while labeling
-(the tool doesn't show it).
+**the chess**, not what the algorithm does. Decide from the board first. On the **dev**
+split the tool shows the detector's suggestion and engine line only *after* you answer a
+question, and you may then keep or change your answer; your first answer is recorded
+separately. A suggestion is a prompt to look again, never a reason to agree: if you would
+not have said yes from the position, say no or unsure. The **holdout** split never shows
+suggestions and should be labeled fully blind. (Workflow note only; the definitions below
+are unchanged, so the guidelines stay at v1.0.)
 
 ## The setting
 

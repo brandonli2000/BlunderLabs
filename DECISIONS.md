@@ -282,3 +282,32 @@ treats a game where both sides match the imported name as owner-unknown (previou
 Neither can arise from the importers; both matter for restored or hand-edited backups.
 **Limitation:** `clockMs` is after the move; the time available *when starting to think* is the
 previous own clock. Decide which to bucket on before building clock buckets (see PROGRESS next steps).
+
+## D-026 · 2026-11-09 · Assisted labeling: judge first, reveal after, never auto-label
+**Decision:** `/label.html` now shows the existing detector's suggestion for a question only
+after the human answers that question, on the dev split only. Rules (`src/tactics/assist.ts`):
+- A suggestion is computed on demand from the item's stored engine lines (no new engine runs)
+  and is never written to `labels`. Only a click creates a label.
+- The detector can suggest "yes" or say nothing. It never suggests "no": silence is not
+  evidence of absence, and "no" suggestions would anchor recall labels toward the detector.
+- The first answer is stored as `review[detector].initial` and never changes; revising changes
+  only the label. `suggestionShown` and `detectorVersion` record what was revealed. Labels
+  loaded from a file without a review record count as blind first answers (the earlier tool
+  showed no detector output). The review field is optional, so dataset version stays 1.
+- The holdout never gets suggestions (`suggestionFor` returns null for it) and should be
+  labeled fully blind; it is the only split whose precision can support the 90% gate.
+- "Uncertain / needs review" is the existing `unsure` label (excluded from precision and
+  recall), plus a `u` key to revisit them. No new label state.
+- Evaluation reads only `labels`, so unreviewed suggestions cannot be scored. It can also
+  score the first (pre-reveal) answers (`basis: "initial"`); `npm run tactics:evaluate` prints
+  both tables when review records exist. Reports show reviewed coverage separately from
+  precision/recall, and `precisionStatus` calls the target met only if the 95% Wilson lower
+  bound is at least 90%.
+**Why:** Detector-suggested labels risk circularity: scoring a detector against labels it
+influenced inflates agreement (anchoring). Recording the blind first answer, keeping the
+holdout untouched and reporting coverage apart from accuracy keeps the benchmark checkable.
+**Limits:** it speeds up hard cases and revision, not a full pass: the detector is silent on
+most items, and recall needs those labeled by hand. Dev labels made with reveals are
+development evidence only. A "review only fired items first" mode was rejected for now
+because choosing items by detector firing would show the suggestion before the human answers.
+Browser-saved work still wins over a reopened file on conflict, but conflicts are now reported.

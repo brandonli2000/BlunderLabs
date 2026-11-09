@@ -17,6 +17,20 @@ export const GUIDELINES_VERSION = "1.0";
 export type Label = "yes" | "no" | "unsure";
 export type Split = "dev" | "holdout";
 
+/**
+ * How one human judgment came about, kept beside (never instead of) the label.
+ * `initial` is the first answer given before any suggestion was shown and is
+ * never changed; `labels` holds the current answer. They differ only if the
+ * human revised after seeing the suggestion.
+ */
+export interface ReviewRecord {
+  initial: Label;
+  /** What the assistant showed after the first answer; null = nothing (silent detector or holdout). */
+  suggestionShown: "yes" | null;
+  /** Version of the detector that produced it, so the record stays attributable. */
+  detectorVersion: number | null;
+}
+
 export interface DatasetItem {
   /** `${gameId}#${ply}`, unique within a dataset. */
   id: string;
@@ -25,6 +39,8 @@ export interface DatasetItem {
   engine: { engineKey: string };
   /** Human labels per detector question; null = not labeled yet. */
   labels: Record<DetectorId, Label | null>;
+  /** Present only for questions a human answered with the assisted tool. */
+  review?: Partial<Record<DetectorId, ReviewRecord>>;
   notes: string;
 }
 
@@ -105,6 +121,10 @@ export function parseDataset(text: string): TacticsDataset {
     }
     if (!it.labels || !LABELS.has(it.labels["hanging-piece"]) || !LABELS.has(it.labels["missed-capture"])) {
       throw new DatasetError(`Item ${it.id}: labels must be "yes", "no", "unsure" or null.`);
+    }
+    for (const [detector, r] of Object.entries(it.review ?? {})) {
+      const ok = r && r.initial !== null && LABELS.has(r.initial) && (r.suggestionShown === null || r.suggestionShown === "yes");
+      if (!ok || it.labels[detector as DetectorId] === null) throw new DatasetError(`Item ${it.id}: bad review record for ${detector}.`);
     }
   });
   return d as TacticsDataset;

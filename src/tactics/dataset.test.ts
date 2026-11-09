@@ -64,6 +64,12 @@ describe("parseDataset", () => {
     expect(() => parseDataset(JSON.stringify({ ...good, items: [good.items[0], good.items[0]] }))).toThrow(/Duplicate/);
     const badLabel = { ...good.items[0]!, labels: { "hanging-piece": "maybe", "missed-capture": null } };
     expect(() => parseDataset(JSON.stringify({ ...good, items: [badLabel] }))).toThrow(/labels must be/);
+    // A review record must describe an existing human label.
+    const review = { "hanging-piece": { initial: "yes", suggestionShown: "yes", detectorVersion: 1 } };
+    expect(() => parseDataset(JSON.stringify({ ...good, items: [{ ...good.items[0]!, review }] }))).toThrow(/bad review record/);
+    const labeled = { ...good.items[0]!, labels: { "hanging-piece": "yes", "missed-capture": null } };
+    expect(() => parseDataset(JSON.stringify({ ...good, items: [{ ...labeled, review: { "hanging-piece": { ...review["hanging-piece"], suggestionShown: "no" } } }] }))).toThrow(/bad review record/);
+    expect(parseDataset(JSON.stringify({ ...good, items: [{ ...labeled, review }] })).items[0]!.review).toEqual(review);
   });
 });
 
