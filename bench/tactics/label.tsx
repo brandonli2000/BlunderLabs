@@ -83,27 +83,27 @@ function App() {
     [item, labels, dataset],
   );
 
-  const go = useCallback(
-    (delta: number) => {
-      setIndex((i) => Math.max(0, Math.min(items.length - 1, i + delta)));
-      setShowAfter(false);
-      setShowEngine(false);
-    },
-    [items.length],
-  );
+  // Moving to another item (or split) always hides the answer-revealing hints again.
+  const showItem = useCallback((at: number) => {
+    setIndex(at);
+    setShowAfter(false);
+    setShowEngine(false);
+  }, []);
+
+  const go = useCallback((delta: number) => showItem(Math.max(0, Math.min(items.length - 1, index + delta))), [items.length, index, showItem]);
 
   const nextUnlabeled = useCallback(() => {
     const at = items.findIndex((i, k) => k > index && !QUESTIONS.every((q) => labels[i.id]?.[q.id]));
-    if (at >= 0) {
-      setIndex(at);
-      setShowAfter(false);
-      setShowEngine(false);
-    }
-  }, [items, index, labels]);
+    if (at >= 0) showItem(at);
+  }, [items, index, labels, showItem]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "TEXTAREA") return;
+      // Leave form fields alone (a <select> uses letters and arrows itself) and never
+      // hijack browser shortcuts such as Ctrl+A or Alt+Left.
+      const target = e.target as HTMLElement;
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       for (const q of QUESTIONS) {
         const k = q.keys.indexOf(e.key);
         if (k >= 0) return setLabel(q.id, LABELS[k]!);
@@ -145,20 +145,7 @@ function App() {
       </Shell>
     );
   }
-  if (!dataset || !item) return <Shell>Loading…</Shell>;
-
-  const c = item.context;
-  const fen = showAfter ? c.fenAfter : c.fenBefore;
-  const played = { from: c.move.uci.slice(0, 2), to: c.move.uci.slice(2, 4) };
-  const arrows = showEngine
-    ? showAfter
-      ? c.bestAfter
-        ? [{ from: c.bestAfter.slice(0, 2), to: c.bestAfter.slice(2, 4), tone: "best" as const }]
-        : []
-      : c.bestBefore
-        ? [{ from: c.bestBefore.slice(0, 2), to: c.bestBefore.slice(2, 4), tone: "best" as const }]
-        : []
-    : [];
+  if (!dataset) return <Shell>Loading…</Shell>;
 
   return (
     <Shell>
@@ -170,7 +157,9 @@ function App() {
             value={split}
             onChange={(e) => {
               setSplit(e.target.value as "dev" | "holdout");
-              setIndex(0);
+              showItem(0);
+              // Give focus back to the page so the labeling keys work immediately.
+              e.target.blur();
             }}
           >
             <option value="dev">dev</option>
@@ -178,7 +167,7 @@ function App() {
           </select>
         </label>
         <span className="mt-mono">
-          {Math.min(index, items.length - 1) + 1}/{items.length} · {done} fully labeled
+          {item ? `${Math.min(index, items.length - 1) + 1}/${items.length} · ${done} fully labeled` : `No items in the ${split} split.`}
         </span>
         <button className="btn" onClick={() => go(-1)}>
           ◀ Prev
@@ -189,56 +178,92 @@ function App() {
         <button className="btn" onClick={nextUnlabeled}>
           Next unlabeled (n)
         </button>
-        <input className="text-input" placeholder="Your name (labeler)" value={labeler} onChange={(e) => setLabeler(e.target.value)} />
+        <input
+          className="text-input"
+          placeholder="Your name (labeler)"
+          value={labeler}
+          onChange={(e) => setLabeler(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        />
         <button className="btn btn-primary" onClick={exportLabeled}>
           Export labels
         </button>
         <FilePicker onText={load} />
       </div>
 
-      <div className="label-main">
-        <div className="label-board">
-          <Board fen={fen} orientation={c.mover} lastMove={showAfter ? played : null} arrows={showAfter ? arrows : [{ ...played, tone: "played" as const }, ...arrows]} />
-          <p className="hint">
-            {showAfter ? "Position after the move." : "Position before the move (grey arrow = move played)."} <kbd>a</kbd> toggles before/after ·{" "}
-            <kbd>e</kbd> engine hint
-          </p>
-        </div>
-        <div className="label-side">
-          <p className="game-title">
-            {c.moveLabel}
-            {c.move.san} <span className="game-result">by {c.mover === "w" ? "White" : "Black"}</span>
-          </p>
-          <p className="game-sub">
-            {item.id} · expected score lost {(c.loss * 100).toFixed(0)}% ({c.classification}) ·{" "}
-            <a href={`https://lichess.org/analysis/${c.fenBefore.replace(/ /g, "_")}`} target="_blank" rel="noreferrer">
-              open on Lichess
-            </a>
-          </p>
-          {showEngine && (
-            <p className="hint">
-              Engine before: {c.bestBefore ? pvToSan(c.fenBefore, c.lineBefore, 6).join(" ") : "—"}
-              <br />
-              Engine reply after: {c.bestAfter ? pvToSan(c.fenAfter, c.lineAfter, 6).join(" ") : "—"}
-            </p>
-          )}
-          {QUESTIONS.map((q) => (
-            <section key={q.id} className="panel">
-              <h2 className="panel-title">{q.title}</h2>
-              <p className="batch-line">{q.prompt}</p>
-              <div className="data-row">
-                {LABELS.map((l, k) => (
-                  <button key={l} className={`btn${labels[item.id]?.[q.id] === l ? " btn-primary" : ""}`} onClick={() => setLabel(q.id, l)}>
-                    {l} <kbd>{q.keys[k]}</kbd>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ))}
-          <p className="hint">Guidelines: docs/tactics/labeling-guidelines.md (v{dataset.guidelinesVersion}). Detector output is never shown here.</p>
-        </div>
-      </div>
+      {item && (
+        <ItemView
+          item={item}
+          answers={labels[item.id] ?? {}}
+          showAfter={showAfter}
+          showEngine={showEngine}
+          onLabel={setLabel}
+          guidelinesVersion={dataset.guidelinesVersion}
+        />
+      )}
     </Shell>
+  );
+}
+
+interface ItemViewProps {
+  item: DatasetItem;
+  answers: Partial<Record<DetectorId, Label>>;
+  showAfter: boolean;
+  showEngine: boolean;
+  onLabel: (id: DetectorId, value: Label) => void;
+  guidelinesVersion: string;
+}
+
+function ItemView({ item, answers, showAfter, showEngine, onLabel, guidelinesVersion }: ItemViewProps) {
+  const c = item.context;
+  const fen = showAfter ? c.fenAfter : c.fenBefore;
+  const played = { from: c.move.uci.slice(0, 2), to: c.move.uci.slice(2, 4) };
+  const hint = showEngine ? (showAfter ? c.bestAfter : c.bestBefore) : null;
+  const arrows = hint ? [{ from: hint.slice(0, 2), to: hint.slice(2, 4), tone: "best" as const }] : [];
+
+  return (
+    <div className="label-main">
+      <div className="label-board">
+        <Board fen={fen} orientation={c.mover} lastMove={showAfter ? played : null} arrows={showAfter ? arrows : [{ ...played, tone: "played" as const }, ...arrows]} />
+        <p className="hint">
+          {showAfter ? "Position after the move." : "Position before the move (grey arrow = move played)."} <kbd>a</kbd> toggles before/after ·{" "}
+          <kbd>e</kbd> engine hint
+        </p>
+      </div>
+      <div className="label-side">
+        <p className="game-title">
+          {c.moveLabel}
+          {c.move.san} <span className="game-result">by {c.mover === "w" ? "White" : "Black"}</span>
+        </p>
+        <p className="game-sub">
+          {item.id} · expected score lost {(c.loss * 100).toFixed(0)}% ({c.classification}) ·{" "}
+          <a href={`https://lichess.org/analysis/${c.fenBefore.replace(/ /g, "_")}`} target="_blank" rel="noreferrer">
+            open on Lichess
+          </a>
+        </p>
+        {showEngine && (
+          <p className="hint">
+            Engine before: {c.bestBefore ? pvToSan(c.fenBefore, c.lineBefore, 6).join(" ") : "—"}
+            <br />
+            Engine reply after: {c.bestAfter ? pvToSan(c.fenAfter, c.lineAfter, 6).join(" ") : "—"}
+          </p>
+        )}
+        {QUESTIONS.map((q) => (
+          <section key={q.id} className="panel">
+            <h2 className="panel-title">{q.title}</h2>
+            <p className="batch-line">{q.prompt}</p>
+            <div className="data-row">
+              {LABELS.map((l, k) => (
+                <button key={l} className={`btn${answers[q.id] === l ? " btn-primary" : ""}`} onClick={() => onLabel(q.id, l)}>
+                  {l} <kbd>{q.keys[k]}</kbd>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+        <p className="hint">Guidelines: docs/tactics/labeling-guidelines.md (v{guidelinesVersion}). Detector output is never shown here.</p>
+      </div>
+    </div>
   );
 }
 
