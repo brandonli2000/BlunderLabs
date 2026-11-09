@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { BatchPanel } from "./BatchPanel";
+import { DataPanel } from "./DataPanel";
 import { getBatchRunner, useBatch } from "./batchInstance";
 import { GameList } from "./GameList";
 import { ImportPanel } from "./ImportPanel";
@@ -33,6 +34,7 @@ export function LibraryPage({ library, onOpen }: LibraryPageProps) {
           }}
         />
         {games && <BatchPanel progress={batch} games={games} />}
+        <DataPanel onRestored={() => void refresh()} />
         <p className="hint privacy-note">
           Your games and analyses are stored only in this browser (IndexedDB). Nothing is uploaded.
         </p>
