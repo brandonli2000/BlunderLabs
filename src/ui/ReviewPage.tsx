@@ -1,101 +1,144 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { analyzeGame, type GameAnalysis } from "../analysis/gameAnalysis";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatScore } from "../core/evaluation";
-import { parseGame, PgnError, splitPgn, type ParsedGame } from "../core/pgn";
-import type { Color } from "../core/types";
-import { CLASS_GLYPH, CLASS_LABEL, isFlagged } from "./annotations";
+import { isPromotion, legalDestinations, pieceColorAt, playMove, type PromotionPiece } from "../core/moves";
+import { parseGame, type ParsedGame } from "../core/pgn";
+import { sideToMove, type Color } from "../core/types";
+import type { GameRecord } from "../library/gameRecord";
+import { getGame } from "../storage/library";
+import { CLASS_GLYPH, isFlagged } from "./annotations";
 import { Board, type BoardArrow } from "./Board";
-import { getEngine } from "./engineInstance";
+import { getDatabase } from "./database";
 import { EvalGraph } from "./EvalGraph";
-import { ImportPanel } from "./ImportPanel";
 import { MoveList } from "./MoveList";
+import { LiveLinesPanel, PlayerStrip, PositionReadout, PromotionPicker, VariationStrip, type Variation } from "./ReviewParts";
+import { useGameAnalysis } from "./useGameAnalysis";
+import { useLiveLines } from "./useLiveLines";
 
-type AnalysisState =
-  | { status: "idle" }
-  | { status: "running"; done: number; total: number }
-  | { status: "done"; analysis: GameAnalysis }
-  | { status: "error"; message: string };
+type Loaded =
+  | { status: "loading" }
+  | { status: "missing" }
+  | { status: "error"; message: string }
+  | { status: "ready"; record: GameRecord; game: ParsedGame };
 
-export function ReviewPage() {
-  const [games, setGames] = useState<string[]>([]);
-  const [gameIndex, setGameIndex] = useState(0);
-  const [game, setGame] = useState<ParsedGame | null>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [ply, setPly] = useState(0);
-  const [orientation, setOrientation] = useState<Color>("w");
-  const [state, setState] = useState<AnalysisState>({ status: "idle" });
-  const abortRef = useRef<AbortController | null>(null);
+interface ReviewPageProps {
+  gameId: string;
+  onAnalysisSaved: () => void;
+}
 
-  const cancelAnalysis = useCallback(() => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    getEngine().stop();
-  }, []);
+export function ReviewPage({ gameId, onAnalysisSaved }: ReviewPageProps) {
+  const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
 
-  const loadGame = useCallback(
-    (pgn: string) => {
-      cancelAnalysis();
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
       try {
-        const parsed = parseGame(pgn);
-        if (parsed.moves.length === 0) throw new PgnError("The game has no moves.");
-        setGame(parsed);
-        setImportError(null);
-        setPly(0);
-        setState({ status: "idle" });
+        const record = await getGame(await getDatabase(), gameId);
+        if (cancelled) return;
+        setLoaded(record ? { status: "ready", record, game: parseGame(record.pgn) } : { status: "missing" });
       } catch (err) {
-        setImportError(err instanceof PgnError ? `Could not read this game: ${err.message}` : String(err));
+        if (!cancelled) setLoaded({ status: "error", message: err instanceof Error ? err.message : String(err) });
       }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId]);
+
+  if (loaded.status === "loading") return <p className="hint">Loading game…</p>;
+  if (loaded.status !== "ready") {
+    return (
+      <div className="panel page-message">
+        <p>{loaded.status === "missing" ? "This game isn't in your library (it may have been deleted)." : loaded.message}</p>
+        <a className="btn" href="#/">
+          Back to library
+        </a>
+      </div>
+    );
+  }
+  return <Review record={loaded.record} game={loaded.game} onAnalysisSaved={onAnalysisSaved} />;
+}
+
+function Review({ record, game, onAnalysisSaved }: { record: GameRecord; game: ParsedGame; onAnalysisSaved: () => void }) {
+  const [ply, setPly] = useState(0);
+  const [orientation, setOrientation] = useState<Color>(() => defaultOrientation(record));
+  const [variation, setVariation] = useState<Variation | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [promotion, setPromotion] = useState<{ from: string; to: string } | null>(null);
+  const { state, run, stop } = useGameAnalysis(record.id, game, onAnalysisSaved);
+
+  const lastPly = game.moves.length;
+  const exploring = variation !== null && variation.cursor > 0;
+  const mainFen = ply === 0 ? game.startFen : game.moves[ply - 1]!.fenAfter;
+  const varMove = exploring ? variation.moves[variation.cursor - 1]! : null;
+  const fen = varMove ? varMove.fenAfter : mainFen;
+  const lastMoveUci = varMove ? varMove.uci : ply > 0 ? game.moves[ply - 1]!.uci : null;
+
+  const live = useLiveLines(exploring ? fen : null);
+  const analysis = state.status === "done" ? state.analysis : null;
+  const verdict = !exploring && analysis && ply > 0 ? analysis.moves[ply - 1]! : null;
+  const position = !exploring ? (analysis?.positions[ply] ?? null) : null;
+
+  const clearInteraction = () => {
+    setSelected(null);
+    setPromotion(null);
+  };
+
+  const seek = useCallback(
+    (p: number) => {
+      setVariation(null);
+      setSelected(null);
+      setPromotion(null);
+      setPly(Math.max(0, Math.min(lastPly, p)));
     },
-    [cancelAnalysis],
+    [lastPly],
   );
 
-  const importText = useCallback(
-    (text: string) => {
-      const split = splitPgn(text);
-      if (split.length === 0) {
-        setImportError("No games found in the input.");
-        return;
-      }
-      setGames(split);
-      setGameIndex(0);
-      loadGame(split[0]!);
+  const step = useCallback(
+    (delta: 1 | -1) => {
+      clearInteraction();
+      if (!variation) return seek(ply + delta);
+      const cursor = variation.cursor + delta;
+      if (cursor < 1) setVariation(null); // back to the branch point on the main line
+      else if (cursor <= variation.moves.length) setVariation({ ...variation, cursor });
     },
-    [loadGame],
+    [variation, ply, seek],
   );
 
-  const runAnalysis = useCallback(async () => {
-    if (!game) return;
-    cancelAnalysis();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    const total = game.moves.length + 1;
-    setState({ status: "running", done: 0, total });
-    try {
-      const analysis = await analyzeGame(getEngine(), game, {
-        signal: controller.signal,
-        onProgress: (done) => setState({ status: "running", done, total }),
-      });
-      if (!controller.signal.aborted) setState({ status: "done", analysis });
-    } catch (err) {
-      if (controller.signal.aborted) return;
-      setState({ status: "error", message: err instanceof Error ? err.message : String(err) });
+  const makeMove = (from: string, to: string, piece?: PromotionPiece) => {
+    clearInteraction();
+    const played = playMove(fen, from, to, piece);
+    if (!played) return;
+    if (!exploring) {
+      if (game.moves[ply]?.uci === played.uci) return seek(ply + 1); // the game move: just advance
+      setVariation({ branchPly: ply, moves: [played], cursor: 1 });
+      return;
     }
-  }, [game, cancelAnalysis]);
+    const kept = variation.moves.slice(0, variation.cursor);
+    setVariation({ ...variation, moves: [...kept, played], cursor: variation.cursor + 1 });
+  };
 
-  useEffect(() => cancelAnalysis, [cancelAnalysis]);
+  const targets = useMemo(() => (selected ? legalDestinations(fen, selected) : []), [fen, selected]);
 
-  const lastPly = game?.moves.length ?? 0;
-  const seek = useCallback((p: number) => setPly(Math.max(0, Math.min(lastPly, p))), [lastPly]);
+  const onSquareClick = (square: string) => {
+    if (promotion) return;
+    if (selected && targets.includes(square)) {
+      if (isPromotion(fen, selected, square)) setPromotion({ from: selected, to: square });
+      else makeMove(selected, square);
+      return;
+    }
+    setSelected(pieceColorAt(fen, square) === sideToMove(fen) && square !== selected ? square : null);
+  };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT")) return;
+      if (target && ["TEXTAREA", "INPUT", "SELECT"].includes(target.tagName)) return;
       const actions: Record<string, () => void> = {
-        ArrowLeft: () => seek(ply - 1),
-        ArrowRight: () => seek(ply + 1),
+        ArrowLeft: () => step(-1),
+        ArrowRight: () => step(1),
         Home: () => seek(0),
         End: () => seek(lastPly),
+        Escape: () => (variation ? seek(variation.branchPly) : clearInteraction()),
         f: () => setOrientation((o) => (o === "w" ? "b" : "w")),
       };
       const action = actions[e.key];
@@ -106,238 +149,148 @@ export function ReviewPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ply, lastPly, seek]);
-
-  const analysis = state.status === "done" ? state.analysis : null;
-  const fen = game ? (ply === 0 ? game.startFen : game.moves[ply - 1]!.fenAfter) : null;
-  const playedMove = game && ply > 0 ? game.moves[ply - 1]! : null;
-  const verdict = analysis && ply > 0 ? analysis.moves[ply - 1]! : null;
-  const position = analysis?.positions[ply] ?? null;
+  }, [step, seek, lastPly, variation]);
 
   const arrows = useMemo<BoardArrow[]>(() => {
-    if (!position?.bestMove) return [];
-    return [{ from: position.bestMove.slice(0, 2), to: position.bestMove.slice(2, 4), tone: "best" }];
-  }, [position]);
+    const best = exploring ? live?.lines[0]?.pv[0] : position?.bestMove;
+    return best ? [{ from: best.slice(0, 2), to: best.slice(2, 4), tone: "best" }] : [];
+  }, [exploring, live, position]);
+
+  const playedMove = !exploring && ply > 0 ? game.moves[ply - 1]! : null;
 
   return (
     <div className="review">
       <div className="review-board">
-        {game && fen ? (
-          <>
-            <PlayerStrip game={game} color={orientation === "w" ? "b" : "w"} analysis={analysis} />
-            <Board
-              fen={fen}
-              orientation={orientation}
-              lastMove={playedMove ? { from: playedMove.uci.slice(0, 2), to: playedMove.uci.slice(2, 4) } : null}
-              arrows={arrows}
-              marker={
-                verdict && playedMove && isFlagged(verdict.classification)
-                  ? {
-                      square: playedMove.uci.slice(2, 4),
-                      tone: verdict.classification,
-                      label: CLASS_GLYPH[verdict.classification]!,
-                    }
-                  : null
-              }
+        <PlayerStrip game={game} color={orientation === "w" ? "b" : "w"} analysis={analysis} />
+        <div className="board-wrap">
+          <Board
+            fen={fen}
+            orientation={orientation}
+            lastMove={lastMoveUci ? { from: lastMoveUci.slice(0, 2), to: lastMoveUci.slice(2, 4) } : null}
+            arrows={arrows}
+            selected={selected}
+            targets={targets}
+            onSquareClick={onSquareClick}
+            marker={
+              verdict && playedMove && isFlagged(verdict.classification)
+                ? { square: playedMove.uci.slice(2, 4), tone: verdict.classification, label: CLASS_GLYPH[verdict.classification]! }
+                : null
+            }
+          />
+          {promotion && (
+            <PromotionPicker
+              color={sideToMove(fen)}
+              onPick={(piece) => makeMove(promotion.from, promotion.to, piece)}
+              onCancel={clearInteraction}
             />
-            <PlayerStrip game={game} color={orientation} analysis={analysis} />
-            <nav className="nav-controls" aria-label="Move navigation">
-              <button className="btn" onClick={() => seek(0)} aria-label="First move">
-                ⏮
-              </button>
-              <button className="btn" onClick={() => seek(ply - 1)} aria-label="Previous move">
-                ◀
-              </button>
-              <span className="ply-readout">
-                {ply}/{lastPly}
-              </span>
-              <button className="btn" onClick={() => seek(ply + 1)} aria-label="Next move">
-                ▶
-              </button>
-              <button className="btn" onClick={() => seek(lastPly)} aria-label="Last move">
-                ⏭
-              </button>
-              <button
-                className="btn btn-quiet"
-                onClick={() => setOrientation((o) => (o === "w" ? "b" : "w"))}
-                aria-label="Flip board"
-              >
-                Flip
-              </button>
-            </nav>
-          </>
-        ) : (
-          <EmptyBoard />
-        )}
+          )}
+        </div>
+        <PlayerStrip game={game} color={orientation} analysis={analysis} />
+        <nav className="nav-controls" aria-label="Move navigation">
+          <button className="btn" onClick={() => seek(0)} aria-label="First move">
+            ⏮
+          </button>
+          <button className="btn" onClick={() => step(-1)} aria-label="Previous move">
+            ◀
+          </button>
+          <span className="ply-readout">{exploring ? `var ${variation.cursor}` : `${ply}/${lastPly}`}</span>
+          <button className="btn" onClick={() => step(1)} aria-label="Next move">
+            ▶
+          </button>
+          <button className="btn" onClick={() => seek(lastPly)} aria-label="Last move">
+            ⏭
+          </button>
+          <button className="btn btn-quiet" onClick={() => setOrientation((o) => (o === "w" ? "b" : "w"))} aria-label="Flip board">
+            Flip
+          </button>
+        </nav>
+        <p className="hint board-hint">Click a piece, then a square, to explore your own moves.</p>
       </div>
 
       <aside className="review-side">
-        <ImportPanel onImport={importText} error={importError} />
+        <section className="panel game-head">
+          <a href="#/" className="back-link">
+            ← Library
+          </a>
+          <p className="game-title">
+            {record.white} – {record.black} <span className="game-result">{record.result}</span>
+          </p>
+          <p className="game-sub">{[record.date?.replace(/\./g, "-"), record.timeControl, record.opening].filter(Boolean).join(" · ")}</p>
+        </section>
 
-        {games.length > 1 && (
+        {variation && variation.moves.length > 0 && (
           <section className="panel">
-            <h2 className="panel-title">Games in file ({games.length})</h2>
-            <select
-              className="game-select"
-              value={gameIndex}
-              onChange={(e) => {
-                const i = Number(e.target.value);
-                setGameIndex(i);
-                loadGame(games[i]!);
-              }}
-            >
-              {games.map((g, i) => (
-                <option key={i} value={i}>
-                  {i + 1}. {gameTitle(g)}
-                </option>
-              ))}
-            </select>
+            <VariationStrip
+              variation={variation}
+              onCursor={(cursor) => setVariation({ ...variation, cursor })}
+              onExit={() => seek(variation.branchPly)}
+            />
+            {exploring && <LiveLinesPanel live={live} />}
           </section>
         )}
 
-        {game && (
-          <section className="panel">
-            <div className="panel-head">
-              <h2 className="panel-title">Analysis</h2>
-              {state.status === "running" ? (
-                <button
-                  className="btn"
-                  onClick={() => {
-                    cancelAnalysis();
-                    setState({ status: "idle" });
-                  }}
-                >
-                  Cancel
-                </button>
-              ) : (
-                <button className="btn btn-primary" onClick={() => void runAnalysis()}>
-                  {analysis ? "Re-analyze" : "Analyze game"}
-                </button>
-              )}
+        <section className="panel">
+          <div className="panel-head">
+            <h2 className="panel-title">Analysis</h2>
+            {state.status === "running" ? (
+              <button className="btn" onClick={stop}>
+                Cancel
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => void run()}>
+                {analysis ? "Re-analyze" : "Analyze game"}
+              </button>
+            )}
+          </div>
+          {state.status === "running" && (
+            <div className="progress" role="progressbar" aria-valuenow={state.done} aria-valuemax={state.total}>
+              <div className="progress-fill" style={{ width: `${(100 * state.done) / state.total}%` }} />
+              <span className="progress-label">
+                Stockfish · position {state.done}/{state.total}
+              </span>
             </div>
-            {state.status === "running" && (
-              <div className="progress" role="progressbar" aria-valuenow={state.done} aria-valuemax={state.total}>
-                <div className="progress-fill" style={{ width: `${(100 * state.done) / state.total}%` }} />
-                <span className="progress-label">
-                  Stockfish · position {state.done}/{state.total}
-                </span>
-              </div>
-            )}
-            {state.status === "error" && (
-              <p className="import-error" role="alert">
-                Analysis failed: {state.message}
+          )}
+          {state.status === "error" && (
+            <p className="import-error" role="alert">
+              Analysis failed: {state.message}
+            </p>
+          )}
+          {state.status === "done" && state.saveError && (
+            <p className="import-error" role="alert">
+              Analysis finished but couldn't be saved: {state.saveError}
+            </p>
+          )}
+          {analysis && (
+            <>
+              <EvalGraph analysis={analysis} ply={ply} onSeek={seek} />
+              {!exploring && (
+                <PositionReadout scoreText={position ? formatScore(position.score) : "—"} depth={position?.depth ?? null} verdict={verdict} />
+              )}
+              <p className="analysis-meta">
+                depth {analysis.limits.depth} · {(analysis.durationMs / 1000).toFixed(1)} s · saved locally
               </p>
-            )}
-            {analysis && (
-              <>
-                <EvalGraph analysis={analysis} ply={ply} onSeek={seek} />
-                <PositionReadout
-                  scoreText={position ? formatScore(position.score) : "—"}
-                  depth={position?.depth ?? null}
-                  verdict={verdict}
-                />
-              </>
-            )}
-            {state.status === "idle" && !analysis && (
-              <p className="hint">
-                Runs Stockfish locally in your browser. Nothing is uploaded.
-              </p>
-            )}
-          </section>
-        )}
+            </>
+          )}
+          {state.status === "idle" && !analysis && <p className="hint">Runs Stockfish locally in your browser. Nothing is uploaded.</p>}
+        </section>
 
-        {game && (
-          <section className="panel panel-moves">
-            <h2 className="panel-title">Moves</h2>
-            <MoveList startFen={game.startFen} moves={game.moves} verdicts={analysis?.moves ?? null} ply={ply} onSeek={seek} />
-          </section>
-        )}
+        <section className="panel panel-moves">
+          <h2 className="panel-title">Moves</h2>
+          <MoveList
+            startFen={game.startFen}
+            moves={game.moves}
+            verdicts={analysis?.moves ?? null}
+            ply={exploring ? -1 : ply}
+            onSeek={seek}
+          />
+        </section>
       </aside>
     </div>
   );
 }
 
-function PositionReadout({
-  scoreText,
-  depth,
-  verdict,
-}: {
-  scoreText: string;
-  depth: number | null;
-  verdict: GameAnalysis["moves"][number] | null;
-}) {
-  return (
-    <div className="readout">
-      <div className="readout-eval">
-        <span className="readout-score">{scoreText}</span>
-        {depth !== null && <span className="readout-depth">depth {depth}</span>}
-      </div>
-      {verdict && (
-        <p className={`readout-verdict verdict-${verdict.classification}`}>
-          <strong>
-            {verdict.san}
-            {CLASS_GLYPH[verdict.classification] ?? ""}
-          </strong>{" "}
-          {CLASS_LABEL[verdict.classification]}
-          {isFlagged(verdict.classification) && (
-            <>
-              {" · "}
-              {formatPct(verdict.winBefore)} → {formatPct(verdict.winAfter)} expected
-              {verdict.bestMoveSan && (
-                <>
-                  {" · "}better was <strong>{verdict.bestMoveSan}</strong>
-                </>
-              )}
-            </>
-          )}
-        </p>
-      )}
-    </div>
-  );
+/** Show the board from the imported player's side when we know who they are. */
+function defaultOrientation(record: GameRecord): Color {
+  const username = record.importedFor?.split(":")[1];
+  return username && record.black.toLowerCase() === username ? "b" : "w";
 }
-
-function PlayerStrip({ game, color, analysis }: { game: ParsedGame; color: Color; analysis: GameAnalysis | null }) {
-  const name = game.headers[color === "w" ? "White" : "Black"] ?? (color === "w" ? "White" : "Black");
-  const elo = game.headers[color === "w" ? "WhiteElo" : "BlackElo"];
-  const accuracy = analysis?.accuracy[color];
-  const counts = analysis
-    ? (["inaccuracy", "mistake", "blunder"] as const).map(
-        (c) => analysis.moves.filter((m) => m.color === color && m.classification === c).length,
-      )
-    : null;
-  return (
-    <div className="player-strip">
-      <span className={`player-dot player-dot-${color}`} aria-hidden />
-      <span className="player-name">{name}</span>
-      {elo && <span className="player-elo">{elo}</span>}
-      {accuracy != null && <span className="player-acc">{accuracy.toFixed(1)}%</span>}
-      {counts && (
-        <span className="player-counts" title="Inaccuracies / mistakes / blunders">
-          <span className="ml-inaccuracy">{counts[0]}?!</span> <span className="ml-mistake">{counts[1]}?</span>{" "}
-          <span className="ml-blunder">{counts[2]}??</span>
-        </span>
-      )}
-    </div>
-  );
-}
-
-function EmptyBoard() {
-  return (
-    <div className="empty-board">
-      <Board fen="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1" orientation="w" />
-      <p className="hint">Import a game to begin the review.</p>
-    </div>
-  );
-}
-
-function formatPct(p: number): string {
-  return `${Math.round(p * 100)}%`;
-}
-
-/** "White – Black (Date)" from raw PGN headers, without a full parse. */
-function gameTitle(pgn: string): string {
-  const tag = (name: string) => pgn.match(new RegExp(`\\[${name} "([^"]*)"\\]`))?.[1];
-  const date = tag("Date");
-  return `${tag("White") ?? "?"} – ${tag("Black") ?? "?"}${date ? ` (${date})` : ""}`;
-}
-

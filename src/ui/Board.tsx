@@ -15,6 +15,10 @@ interface BoardProps {
   arrows?: BoardArrow[];
   /** Square to mark with the classification of the move that landed there. */
   marker?: { square: string; tone: "inaccuracy" | "mistake" | "blunder"; label: string } | null;
+  /** Click-to-move support: selected square and its legal destinations. */
+  selected?: string | null;
+  targets?: string[];
+  onSquareClick?: (square: string) => void;
 }
 
 // Interim piece rendering: Unicode glyphs with a text-presentation selector.
@@ -23,7 +27,7 @@ const GLYPHS: Record<PieceType, string> = { k: "♚", q: "♛", r: "♜", b: "�
 const TEXT_PRESENTATION = "︎";
 const FILES = "abcdefgh";
 
-export function Board({ fen, orientation, lastMove, arrows = [], marker }: BoardProps) {
+export function Board({ fen, orientation, lastMove, arrows = [], marker, selected, targets = [], onSquareClick }: BoardProps) {
   const pieces = useMemo(() => piecesFromFen(fen), [fen]);
 
   /** Top-left corner of a square in board units for the current orientation. */
@@ -52,11 +56,36 @@ export function Board({ fen, orientation, lastMove, arrows = [], marker }: Board
     }
   }
 
+  /** Square under a pointer event, accounting for orientation. */
+  const squareAt = (e: React.MouseEvent<SVGSVGElement>): string | null => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const col = Math.floor(((e.clientX - rect.left) / rect.width) * 8);
+    const row = Math.floor(((e.clientY - rect.top) / rect.height) * 8);
+    if (col < 0 || col > 7 || row < 0 || row > 7) return null;
+    const file = orientation === "w" ? col : 7 - col;
+    const rank = orientation === "w" ? 7 - row : row;
+    return `${FILES[file]}${rank + 1}`;
+  };
+
+  const occupied = new Set(pieces.map((p) => p.square));
   const bottomRank = orientation === "w" ? "1" : "8";
   const leftFile = orientation === "w" ? "a" : "h";
 
   return (
-    <svg className="board" viewBox="0 0 8 8" role="img" aria-label={`Chess position ${fen}`}>
+    <svg
+      className={`board${onSquareClick ? " board-interactive" : ""}`}
+      viewBox="0 0 8 8"
+      role="img"
+      aria-label={`Chess position ${fen}`}
+      onClick={
+        onSquareClick
+          ? (e) => {
+              const square = squareAt(e);
+              if (square) onSquareClick(square);
+            }
+          : undefined
+      }
+    >
       <defs>
         {(["best", "played"] as const).map((tone) => (
           <marker
@@ -74,6 +103,11 @@ export function Board({ fen, orientation, lastMove, arrows = [], marker }: Board
         ))}
       </defs>
       {squares}
+      {selected &&
+        (() => {
+          const { x, y } = pos(selected);
+          return <rect x={x} y={y} width={1} height={1} className="sq-selected" />;
+        })()}
       {FILES.split("").map((f) => {
         const { x } = pos(`${f}${bottomRank}`);
         return (
@@ -103,6 +137,14 @@ export function Board({ fen, orientation, lastMove, arrows = [], marker }: Board
           >
             {GLYPHS[p.type] + TEXT_PRESENTATION}
           </text>
+        );
+      })}
+      {targets.map((t) => {
+        const { x, y } = pos(t);
+        return occupied.has(t) ? (
+          <circle key={`t${t}`} cx={x + 0.5} cy={y + 0.5} r={0.46} className="target target-capture" />
+        ) : (
+          <circle key={`t${t}`} cx={x + 0.5} cy={y + 0.5} r={0.14} className="target" />
         );
       })}
       {arrows.map((a) => {
