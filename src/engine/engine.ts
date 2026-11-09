@@ -59,6 +59,8 @@ export class UciEngine {
   private multiPv = 1;
   private ready: Promise<void> | null = null;
   private terminated = false;
+  /** Time from first `init()` to `readyok`, in ms; null until ready. */
+  initMs: number | null = null;
 
   constructor(transport: EngineTransport) {
     this.transport = transport;
@@ -68,8 +70,10 @@ export class UciEngine {
   /** Handshake; safe to call repeatedly. */
   init(): Promise<void> {
     this.ready ??= (async () => {
+      const started = performance.now();
       await this.sendAndWait("uci", "uciok");
       await this.sendAndWait("isready", "readyok");
+      this.initMs = performance.now() - started;
     })();
     return this.ready;
   }

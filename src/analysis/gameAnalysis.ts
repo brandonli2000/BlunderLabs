@@ -41,6 +41,8 @@ export interface GameAnalysis {
   moves: MoveVerdict[];
   accuracy: Record<Color, number | null>;
   limits: SearchLimits;
+  /** Wall-clock time spent analysing, in ms (for performance tracking). */
+  durationMs: number;
 }
 
 export interface AnalyzeOptions {
@@ -50,6 +52,21 @@ export interface AnalyzeOptions {
 }
 
 export const DEFAULT_LIMITS: SearchLimits = { depth: 14 };
+
+/** Identifies the engine build; part of every stored analysis key. */
+export const ENGINE_ID = "stockfish-19-lite-single";
+
+/**
+ * Key for caching analyses: results are only reusable for the same engine
+ * build and search settings.
+ */
+export function analysisEngineKey(limits: SearchLimits): string {
+  const parts = [ENGINE_ID];
+  if (limits.depth !== undefined) parts.push(`d${limits.depth}`);
+  if (limits.movetimeMs !== undefined) parts.push(`t${limits.movetimeMs}`);
+  if ((limits.multiPv ?? 1) !== 1) parts.push(`pv${limits.multiPv}`);
+  return parts.join("|");
+}
 
 /**
  * Evaluate every position of a game and grade each move by the change in
@@ -61,6 +78,7 @@ export async function analyzeGame(
   game: ParsedGame,
   { limits = DEFAULT_LIMITS, signal, onProgress }: AnalyzeOptions = {},
 ): Promise<GameAnalysis> {
+  const started = performance.now();
   const fens = gamePositions(game);
   const positions: PositionEval[] = [];
   await engine.newGame();
@@ -92,7 +110,13 @@ export async function analyzeGame(
   });
 
   const accuracyOf = (color: Color) => gameAccuracy(moves.filter((m) => m.color === color).map((m) => m.accuracy));
-  return { positions, moves, accuracy: { w: accuracyOf("w"), b: accuracyOf("b") }, limits };
+  return {
+    positions,
+    moves,
+    accuracy: { w: accuracyOf("w"), b: accuracyOf("b") },
+    limits,
+    durationMs: performance.now() - started,
+  };
 }
 
 function toPositionEval(ply: number, result: SearchResult): PositionEval {
