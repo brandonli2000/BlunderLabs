@@ -28,6 +28,8 @@ src/
     phase.ts       gamePhase heuristic (adapted from Lichess' Divider)
     evaluation.ts  UciScore → Score (toWhitePov), win probability, formatScore
     classify.ts    classifyMove, moveAccuracy, gameAccuracy
+    see.ts         legal static exchange evaluation: seeCapture, bestCaptureOn, nullMoveFen
+    stats.ts       wilsonInterval (95% CI for proportions)
   engine/      Talking to UCI engines
     uci.ts         parseInfo, parseBestMove (pure)
     engine.ts      UciEngine: handshake, serialized searches, MultiPV, stop, terminate,
@@ -48,6 +50,13 @@ src/
     gameRecord.ts  GameRecord, gameIdentity (dedup key), toGameRecord, openingFromEcoUrl
     importGames.ts importPgns: parse → identify → store; per-game failures tolerated
     mistakes.ts    extractMistakes (+ ownerColor), filterMistakes, sortMistakes
+  tactics/     Tactical pattern detection (pure; not shown in the UI until validated)
+    types.ts       MoveContext (positions + engine evidence per move), Detection, options
+    context.ts     buildMoveContexts(game, analysis)
+    hangingPiece.ts, missedCapture.ts  detectors v1 (versioned, with subtypes and evidence)
+    index.ts       DETECTORS registry, detectPatterns
+    dataset.ts     versioned hand-labelable dataset format, game-level dev/holdout split
+    evaluation.ts  precision/recall/Wilson per detector, disagreement report
   storage/     IndexedDB (schema v2)
     db.ts          openDatabase, append-only MIGRATIONS (v1 games/analyses, v2 jobs), StorageError
     library.ts     games + analyses: addGames (dedup), listGames, getGame, deleteGame (cascades),
@@ -65,7 +74,11 @@ src/
   test/        shared fixtures and fake fetch
 bench/         workload.ts (shared), node.bench.ts (npm run bench), strategy.bench.ts
                (npm run bench:strategy), browser page (/bench.html), fixtures/, results/
+bench/tactics/ build-dataset.bench.ts (npm run tactics:dataset → dataset-v1.json),
+               evaluate.bench.ts (npm run tactics:evaluate), label.tsx (/label.html, dev only),
+               labels/ (human-labeled files), reports/ (evaluation output)
 e2e/           Playwright specs (npm run test:e2e); helpers.ts has the console-error fixture
+docs/tactics/  labeling-guidelines.md (v1.0)
 docs/design/   Design proposals (0001: player profile + first motif detector)
 ```
 
@@ -109,6 +122,8 @@ Explore: click or typed SAN → playMove/playSan → Variation → useLiveLines 
 Batch:   BatchRunner loop: pending = gameIdsNewestFirst − analyzedGameIds − job.failed
          → analyzeGame ("batch" worker) → saveAnalysis (immediately) → repeat; job status in "jobs"
 Mistakes: latestAnalysesByGame + listGames → extractMistakes per game → filter/sort → #/game/<id>/<ply>
+Tactics: buildMoveContexts → detectPatterns (SEE + engine evidence) → Detection[]   (offline only)
+         dataset-v1.json → /label.html (blind) → labels/*.json → evaluateDetectors → reports/
 Backup:  createBackup (one read tx) → JSON download;  file → validateBackup → planRestore (preview)
          → applyRestore (one write tx, add() only)
 ```

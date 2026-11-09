@@ -56,7 +56,8 @@ ability for competitive university admissions.
 3. Give the user a concise plan (highest-priority tasks first), then implement.
 
 **End of session**
-1. Verify: `npm run check` and `npm run build` pass; exercise UI changes in a real browser.
+1. Verify: `npm run check`, `npm run test:e2e` and `npm run build` pass; exercise UI
+   changes in a real browser.
 2. Update `PROGRESS.md` (done / partial / planned, bugs, next tasks with enough detail
    that a fresh session can start cold).
 3. Add a `DECISIONS.md` entry for any significant choice; add `ENGINEERING_LOG.md`
@@ -71,9 +72,12 @@ ability for competitive university admissions.
 
 ## Commands
 
-- `npm run dev`: dev server (serves Stockfish at `/engine/`)
-- `npm run check`: typecheck + all tests (includes real-Stockfish integration tests)
+- `npm run dev`: dev server (serves Stockfish at `/engine/`; dev-only pages `/bench.html`, `/label.html`)
+- `npm run check`: typecheck + unit/integration tests (includes real-Stockfish tests)
+- `npm run test:e2e`: Playwright end-to-end tests (Chromium; external APIs always mocked)
 - `npm run build`: production build into `dist/`
+- `npm run bench` / `bench:strategy`: performance and analysis-strategy benchmarks (write `bench/results/`)
+- `npm run tactics:dataset` / `tactics:evaluate`: build the tactics dataset / score detectors against labels
 
 ## Engineering rules
 
@@ -98,6 +102,38 @@ ability for competitive university admissions.
 - **Privacy:** analysis runs locally; never send user games anywhere without an explicit,
   documented product decision.
 - Comments explain *why*, not *what*. Keep files focused (split around ~300 lines).
+- **E2E:** every Playwright test uses `test` from `e2e/helpers.ts` (fails on any page console
+  error) and never touches real Lichess/Chess.com; use recorded fixtures.
+
+## Evidence and evaluation rules
+
+- **Three levels of claims, never blurred** (design 0001): *observation* (engine eval drop),
+  *pattern* (deterministic detector over position + engine line), *hypothesis* (a cause such
+  as "misses threats"), which needs diagnostic testing first. Clock data are facts about the
+  clock, never emotions.
+- **Never fabricate labels, users, measurements or results.** Human labels come only from
+  people via `/label.html`; generated datasets have null labels. Unit-test positions are test
+  data and must never be used as evaluation data.
+- **Detectors** (`src/tactics/`) need static evidence (SEE) *and* engine agreement *and* an
+  eval loss; they carry a version number and explanatory evidence. Don't show them in the UI
+  until a labeled holdout supports ≥ 90% precision with a meaningful Wilson lower bound.
+  Develop against the dev split only; the holdout is for final numbers.
+- **Analysis methodology** (`DEFAULT_PLAN`) changes only with a documented accuracy
+  comparison (`bench/strategy.bench.ts`, D-021).
+- **Benchmarks:** report only numbers backed by a results file, with hardware and method;
+  note when other load overlapped a run, and don't present such timings as results.
+
+## Repository practices
+
+- Stage files by explicit path. Experimental outputs (`bench/results/reference-*`,
+  `strategy-*`) are gitignored; add them with `git add -f` only when deliberately publishing.
+- Never overwrite a dataset that may contain human labels (`tactics:dataset` refuses unless
+  `OVERWRITE=1`).
+- Commit identity for this repo: `brandonli2000 <271024312+brandonli2000@users.noreply.github.com>`
+  (GitHub blocks pushes exposing the private email). Remote: `origin` =
+  github.com/brandonli2000/BlunderLabs. Push only when the owner explicitly asks.
+- Tooling gotcha (Windows Git Bash): heredocs containing apostrophes break the Bash tool.
+  Write files with the Write/Edit tools, or put edit scripts in the scratchpad and run them.
 
 ## Visual identity: "lab notebook"
 

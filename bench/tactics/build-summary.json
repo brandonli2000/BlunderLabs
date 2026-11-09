@@ -1,0 +1,17 @@
+{
+  "cpu": "Intel(R) Core(TM) Ultra 7 155H",
+  "node": "v24.16.0",
+  "games": 53,
+  "movesAnalysed": 3873,
+  "datasetItems": 661,
+  "bySplit": {
+    "dev": 390,
+    "holdout": 271
+  },
+  "fired": {
+    "hanging-piece": 24,
+    "missed-capture": 12
+  },
+  "detectorMsPerItem": 1.481,
+  "bestCaptureOnMsPerCall": 2.885
+}

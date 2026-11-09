@@ -64,6 +64,22 @@ The original-algorithm work needs evaluation methods, not just implementations:
 - **Performance budgets:** analysis throughput (positions/sec), time-to-interactive, and
   memory, measured with a repeatable script.
 
+## Where we are (updated 2026-11-08)
+
+Phase 1 (foundation) is functionally complete; public deployment waits on the licence
+decision. Phase 2 is in progress: batch analysis, clocks and the mistake catalogue are done,
+and the first original algorithm work (legal SEE + two tactical detectors + an evaluation
+dataset) is built but **not yet validated**.
+
+**Next priorities:** (1) owner labels the dev split → measure and improve detectors;
+(2) per-player profile v0 (design 0001); (3) clean re-timing of analysis strategies;
+(4) deployment once licensed.
+
+**Unresolved issues:** licence (GPL-3.0 recommended, D-004) blocks deployment · no human
+labels yet (detector precision unknown) · evaluation games come mostly from one player ·
+browser benchmark numbers need a clean, unautomated re-run · no drag-and-drop board input or
+original piece set. Session-level detail lives in PROGRESS.md.
+
 ## Phases
 
 Status legend: ✅ done · 🟡 in progress · ⬜ planned
@@ -92,13 +108,22 @@ Goal: move from single games to patterns across many games.
 - ✅ Per-move clock times from `[%clk]` (measured vs estimated, explicit gaps)
 - ✅ Batch analysis of imported collections (resumable, pausable, crash-tolerant, one tab at a time)
 - ✅ Mistake catalogue v0: every flagged move with position, phase, clock; filters; links to review
-- 🟡 Analysis-strategy experiment (shallow pass + selective deepening vs uniform depth),
-  measured against a depth-18 reference before any methodology change
+- ✅ Analysis-strategy experiment vs a depth-18 reference (53 games): keep uniform depth 14
+  for now (D-021); refine plans need a clean re-timing before adoption
+- ✅ Library backup/restore and E2E test suite (supporting work done during this phase)
+- 🟡 **Tactical Intelligence Engine v1** (first original algorithm work):
+  - ✅ Legal static exchange evaluation (`core/see.ts`)
+  - ✅ Detectors v1: hanging piece, missed capture (SEE + engine agreement + loss), versioned, with evidence
+  - ✅ Evaluation infrastructure: dataset format, 661 unlabeled real-game items (dev/holdout by
+    game), blind labeling tool, guidelines v1.0, precision/recall/Wilson harness
+  - ⬜ **Human labels** (owner) → dev-split error analysis → detector v2 → holdout precision
+  - ⬜ Show detections in the catalogue only after holdout precision ≥ 90% with a meaningful
+    lower confidence bound (D-023)
 - ⬜ Per-player improvement profile: rates with Wilson intervals by phase, colour, time
   class and clock bucket; explicit player identity (design: `docs/design/0001-…`)
-- ⬜ First **tactical motif detectors**: hanging piece and missed capture via legal SEE +
-  engine-line agreement, validated on a hand-labelled set (design 0001); later forks, pins,
-  back-rank, missed mate
+- ⬜ Further detectors on the same framework: forks, pins, overloaded defenders, back-rank
+  weaknesses, discovered attacks, missed mate; calculation-depth analysis (how deep the
+  refutation was)
 
 ### Phase 3: Diagnosis engine (core differentiator)
 Goal: explain *why*, with evidence and confidence.

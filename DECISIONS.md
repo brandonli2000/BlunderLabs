@@ -204,3 +204,52 @@ error fails the test.
 integration is exactly what unit tests can't cover. Chromium only, for now; Firefox and WebKit
 would mainly add CI time until there are browser-specific features.
 **CI:** a separate `e2e` job; the HTML report is uploaded on failure.
+
+## D-021 · 2026-11-08 · Analysis plan stays uniform depth 14 after the strategy experiment
+**Evidence:** `bench/strategy.bench.ts` on 53 real games (3,873 moves) against a uniform
+depth-18 reference. See ENGINEERING_LOG "Strategy experiment results".
+**Decision:** Keep `DEFAULT_PLAN` = uniform depth 14 for now.
+**Why:** The d10→d14 refine plan matched d14 on mistake-or-worse detection (P/R 88.9/87.1
+vs 88.0/86.2) but lost inaccuracy recall (80.4 vs 85.5%) and "best move" agreement (75.5 vs
+81.0%), because unrefined positions keep depth-10 best moves. Its speed advantage is
+unproven: timings were taken while other CPU-heavy work ran. Refine to depth 16 was the most
+accurate (P/R 92.8/91.2) but, by those noisy timings, slower than d14.
+**Revisit:** re-time on an idle machine (the reference is cached), and consider "d10 → d16"
+for *batch* analysis, where mistake detection matters more than best-move labels.
+
+## D-022 · 2026-11-08 · SEE over legal moves, not attack bitboards
+**Decision:** `core/see.ts` plays exchange sequences with chess.js legal moves.
+**Why:** Correct by construction for absolute pins, x-rays, king legality, promotions and en
+passant, which are exactly the cases hand-rolled attack-map SEE gets wrong. Cost is a few
+legal-move generations per step, measured at well under a millisecond per call (ENGINEERING_LOG).
+That's irrelevant at a handful of squares per move. It isn't suitable inside a search engine,
+which we don't write.
+**Known limitations:** static (one square, no checks/threats/zwischenzugs), fixed piece values,
+relative pins ignored, least-valuable recapture convention. Detectors compensate by
+requiring engine agreement.
+
+## D-023 · 2026-11-08 · Detectors need static AND engine evidence, and carry versions
+**Decision:** A tactical detection requires (1) an SEE material gain ≥ 2, (2) the engine's
+own move to be the capture in question (best reply for hanging pieces, best move for missed
+captures), and (3) an expected-score loss ≥ 0.10 for the move. Each detector has a version
+number, a subtype, and machine-readable evidence plus a one-line explanation.
+**Why:** SEE alone over-reports ("free" pieces that are poisoned); the engine alone can't
+say *what* happened. The conjunction is the distinction between a tactical opportunity and
+a merely available capture, and it targets precision over recall: a wrong explanation is
+worse than none.
+**Not exposed in the UI** until a labeled holdout supports ≥ 90% precision with a Wilson
+interval whose lower bound is meaningful (not just a high point estimate on a few labels).
+
+## D-024 · 2026-11-08 · Evaluation dataset: real mistakes, game-level split, blind labeling
+**Decision:** `bench/tactics/dataset-v1.json` holds every move with loss ≥ 0.05 from 53 real
+public games, each item self-contained (positions + engine evidence), all labels null.
+Items are split dev/holdout (~70/30) by hashing the game id, so a game never straddles
+splits. Labels are made in `/label.html`, which never runs detectors (blind) and hides
+engine hints until requested; guidelines define the questions as chess concepts, not
+detector rules (`docs/tactics/labeling-guidelines.md`).
+**Why:** Unit-test positions (constructed to exercise rules) must not double as evaluation
+data. Evaluating on mistakes from real games measures performance where it will be used.
+Blind labeling avoids confirmation bias, and the game-level split avoids leakage between
+correlated moves of one game.
+**Limitation:** one source player (thibault, ~1700–1850 Lichess blitz) dominates the set; a
+representative evaluation needs games across rating bands and players.

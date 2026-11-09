@@ -164,3 +164,42 @@ while the strategy experiment was using CPU in the background), build OK.
 E2E tests in Chromium in ~38 s locally (3 workers), stable across a `--repeat-each=2` run
 (26/26). Catalogue build time shown in-app: 12 ms for one analysed 46-ply game (Chrome,
 same machine as earlier benchmarks).
+
+### 2026-11-08 · Measurement · Strategy experiment results (session 5)
+`npm run bench:strategy`: 53 distinct real games, 3,873 moves, each strategy compared move
+by move with a uniform depth-18 reference (Stockfish 19 lite, Node 24, Core Ultra 7 155H).
+Raw: `bench/results/strategy-2026-11-09T02-59-17-760Z.json` (gitignored experimental output;
+reference cached in `reference-d18.json`).
+
+| Strategy | Searches | Class agree | Severity agree | Mistake+ P / R | Inaccuracy+ P / R |
+|---|---|---|---|---|---|
+| uniform d14 (current) | 3,926 | 81.0% | 92.1% | 88.0 / 86.2 | 84.0 / 85.5 |
+| uniform d12 | 3,926 | 75.3% | 89.7% | 87.8 / 80.4 | 80.1 / 81.6 |
+| uniform d10 | 3,926 | 71.1% | 88.4% | 84.6 / 73.9 | 76.2 / 77.1 |
+| d10 → d14 @ 0.03 | 5,511 | 75.5% | 92.3% | 88.9 / 87.1 | 90.0 / 80.4 |
+| d10 → d14 @ 0.02 | 5,965 | 75.6% | 92.2% | 88.3 / 84.2 | 88.6 / 82.8 |
+| d10 → d16 @ 0.03 | 5,511 | 76.7% | 93.8% | 92.8 / 91.2 | 91.6 / 82.4 |
+
+(341 reference mistake-or-worse moves.) Findings: selective deepening keeps mistake
+detection at d14 quality or better, but loses inaccuracy recall and "best move" agreement,
+because unrefined positions keep shallow best moves. **Wall-clock timings are not reported
+as results**: other CPU-heavy work (E2E runs, screenshots) overlapped the candidate runs.
+Decision D-021: keep uniform d14; re-time on an idle machine before reconsidering.
+
+### 2026-11-08 · Design · Legal SEE and the first tactical detectors (session 5)
+`core/see.ts` evaluates exchanges by playing them with chess.js legal moves, so absolute
+pins, x-rays, king legality, promotions and en passant are handled by construction (17
+tests, each isolating one rule). Detectors (`src/tactics/`) report a pattern only when three
+independent signals agree: SEE material gain ≥ 2, the engine's own move is that capture,
+and the move lost ≥ 0.10 expected score. That conjunction separates a tactical opportunity
+from a merely available capture. Writing tests caught two wrong *expectations*: Bxf7+ is also
+safe when a queen backs up the f-file, and a pawn's four promotion moves aren't four squares.
+
+### 2026-11-08 · Measurement · Tactics dataset v1 and detector cost (session 5)
+`npm run tactics:dataset` analysed 53 real games (3,873 moves) at the default plan and kept
+moves with loss ≥ 0.05: **661 items** (390 dev / 271 holdout, split by game). Unvalidated
+firing counts: hanging-piece 24, missed-capture 12 (3.6% and 1.8% of items). Cost in Node:
+1.48 ms per item for both detectors, 2.9 ms per `bestCaptureOn` call. **There are no human
+labels yet, so precision and recall are unknown.** Raw: `bench/tactics/build-summary.json`.
+Limitation: games mostly from one ~1750 Lichess player, so a representative evaluation needs
+more players and rating bands.
